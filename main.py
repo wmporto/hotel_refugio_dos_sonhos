@@ -298,13 +298,11 @@ def criar_tela_nova_reserva(page: ft.Page) -> ft.View:
         except Exception as ex:
             mostrar_snackbar(page, f"Erro inesperado: {ex}", error=True)
 
-
-    return ft.View(
+        return ft.View(
         "/nova_reserva",
         controls=[
-            # CORREÇÃO: Use ft.Colors
-            ft.AppBar(title=ft.Text("Criar Nova Reserva"), bgcolor=ft.Colors.SURFACE_VARIANT),
-             # CORREÇÃO: Use ft.padding.all()
+             # CORREÇÃO: Usar cor do TEMA para surface_variant
+            ft.AppBar(title=ft.Text("Criar Nova Reserva"), bgcolor=page.theme.color_scheme.surface_variant),
             ft.Padding(padding=ft.padding.all(20), content=
                 ft.Column(
                     controls=[
@@ -445,7 +443,7 @@ def criar_tela_visualizar_reservas(page: ft.Page) -> ft.View:
         "/reservas",
         controls=[
             # CORREÇÃO: Use ft.Colors
-            ft.AppBar(title=ft.Text("Visualizar Reservas"), bgcolor=ft.Colors.SURFACE_VARIANT),
+            ft.AppBar(title=ft.Text("Visualizar Reservas"), bgcolor=page.theme.color_scheme.surface_variant),
             ft.Container(content=reservas_ui, expand=True)
         ]
     )
@@ -456,7 +454,10 @@ def main(page: ft.Page):
     page.title = "Sistema de Reservas - Refúgio dos Sonhos"
     page.vertical_alignment = ft.MainAxisAlignment.START
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-    # page.theme_mode = ft.ThemeMode.LIGHT # Ou DARK
+    # Adiciona configuração do tema (opcional, mas bom para garantir que color_scheme exista)
+    page.theme = ft.Theme() # Usa o tema padrão
+    page.dark_theme = ft.Theme() # Pode configurar um tema escuro também
+    # page.theme_mode = ft.ThemeMode.SYSTEM # Ou LIGHT, DARK
 
     if not gerenciador.listar_clientes():
         print("Carregando dados iniciais...")
@@ -468,9 +469,8 @@ def main(page: ft.Page):
         print(f"Mudando para rota: {page.route}")
         page.views.clear()
 
-        # Adiciona a view correspondente à rota
-        # Envolve a criação da view em try-except para pegar erros de construção
-        try:
+    try:
+            # --- IMPORTANTE: Acessar page.theme só é seguro *depois* que main foi chamada ---
             if page.route == "/":
                 page.views.append(criar_tela_inicial(page))
             elif page.route == "/clientes":
@@ -480,18 +480,27 @@ def main(page: ft.Page):
             elif page.route == "/reservas":
                 page.views.append(criar_tela_visualizar_reservas(page))
             else:
-                 # Rota não encontrada, volta para o início
                  print(f"Rota desconhecida: {page.route}. Redirecionando para /")
-                 page.views.append(criar_tela_inicial(page))
+                 page.views.append(criar_tela_inicial(page)) # Cria a inicial como fallback
 
-            page.update() # Atualiza a página DEPOIS de adicionar a view com sucesso
-
-        except Exception as e:
-            print(f"Erro CRÍTICO ao construir a view para a rota {page.route}: {e}")
-            # Opcional: Mostrar uma tela de erro genérica
-            page.views.append(ft.View("/", [ft.AppBar(title=ft.Text("Erro")), ft.Text(f"Ocorreu um erro ao carregar a página: {e}")]))
             page.update()
 
+    except Exception as e:
+            print(f"Erro CRÍTICO ao construir a view para a rota {page.route}: {e}")
+            # Tenta exibir uma tela de erro simples
+            try:
+                page.views.clear() # Limpa qualquer coisa parcialmente construída
+                # Usa cores estáticas aqui para garantir que funcione mesmo se o tema falhar
+                page.views.append(ft.View("/", [
+                        ft.AppBar(title=ft.Text("Erro"), bgcolor=ft.Colors.RED_700),
+                        ft.Text(f"Ocorreu um erro ao carregar a página '{page.route}':"),
+                        ft.Text(str(e))
+                    ], bgcolor=ft.Colors.BACKGROUND) # Cor de fundo estática
+                )
+                page.update()
+            except Exception as inner_e:
+                 print(f"Erro ao tentar exibir a tela de erro: {inner_e}")
+                 # Se nem a tela de erro funcionar, não há muito mais a fazer na UI
 
     def view_pop(view):
         """Chamado quando o botão 'voltar' do Flet (ou do OS) é pressionado."""
