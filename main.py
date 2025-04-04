@@ -74,7 +74,7 @@ def criar_tela_inicial(page: ft.Page) -> ft.View:
             lista_quartos_ui.controls.append(
                 ft.Card(
                     ft.Container(
-                        padding=10, # Container aceita padding numérico
+                        padding=ft.padding.all(10),
                         content=ft.Column([
                             ft.Text(f"Quarto {quarto.numero} ({quarto.tipo.capitalize()})", weight=ft.FontWeight.BOLD),
                             ft.Text(f"Preço: R$ {quarto.preco_diaria:.2f}/noite"),
