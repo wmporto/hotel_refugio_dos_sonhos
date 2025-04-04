@@ -183,9 +183,8 @@ def criar_tela_gerenciar_clientes(page: ft.Page) -> ft.View:
     return ft.View(
         "/clientes",
         controls=[
-            # CORREÇÃO: Use ft.Colors
-            ft.AppBar(title=ft.Text("Gerenciar Clientes"), bgcolor=ft.Colors.SURFACE_VARIANT),
-            # CORREÇÃO: Use ft.padding.all()
+            # CORREÇÃO: Usar cor do TEMA para surface_variant
+            ft.AppBar(title=ft.Text("Gerenciar Clientes"), bgcolor=page.theme.color_scheme.surface_variant),
             ft.Padding(padding=ft.padding.all(10), content=
                 ft.Column([
                     ft.Text("Adicionar Novo Cliente", style=ft.TextThemeStyle.TITLE_MEDIUM),
@@ -196,7 +195,6 @@ def criar_tela_gerenciar_clientes(page: ft.Page) -> ft.View:
                 ])
             ),
             ft.Divider(),
-            # CORREÇÃO: Use ft.padding.all()
             ft.Padding(padding=ft.padding.all(10), content=
                 ft.Column([
                     ft.Text("Clientes Cadastrados", style=ft.TextThemeStyle.TITLE_MEDIUM),
@@ -205,7 +203,6 @@ def criar_tela_gerenciar_clientes(page: ft.Page) -> ft.View:
             )
         ],
     )
-
 
 def criar_tela_nova_reserva(page: ft.Page) -> ft.View:
     """Cria a View para realizar uma nova reserva."""
