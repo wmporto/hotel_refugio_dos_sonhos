@@ -1,0 +1,520 @@
+# main.py
+import flet as ft
+from datetime import date, timedelta, datetime
+from models import ( # Importa tudo do __init__.py de models
+    Cliente,
+    Quarto,
+    Reserva,
+    GerenciadorDeReservas
+)
+
+# --- Instância Global do Gerenciador (simplificação para este exemplo) ---
+# Em aplicações maiores, pode-se usar padrões de gerenciamento de estado mais robustos
+gerenciador = GerenciadorDeReservas()
+
+# --- Dados Iniciais de Exemplo ---
+def carregar_dados_iniciais():
+    # Clientes
+    c1 = Cliente("Alice Silva", "(11) 98765-4321", "alice.silva@email.com")
+    c2 = Cliente("Bruno Costa", "(21) 91234-5678", "bruno.costa@email.com")
+    c3 = Cliente("Carla Dias", "(31) 99999-0000", "carla.dias@provider.net")
+    gerenciador.adicionar_cliente(c1)
+    gerenciador.adicionar_cliente(c2)
+    gerenciador.adicionar_cliente(c3)
+
+    # Quartos
+    q101 = Quarto(numero=101, tipo="single", preco_diaria=150.00)
+    q102 = Quarto(numero=102, tipo="double", preco_diaria=250.00)
+    q201 = Quarto(numero=201, tipo="suite", preco_diaria=400.00)
+    q202 = Quarto(numero=202, tipo="double", preco_diaria=260.00)
+    gerenciador.adicionar_quarto(q101)
+    gerenciador.adicionar_quarto(q102)
+    gerenciador.adicionar_quarto(q201)
+    gerenciador.adicionar_quarto(q202)
+    q202.set_status_disponibilidade("manutenção") # Exemplo de status
+
+    # Reservas (Exemplo)
+    try:
+        hoje = date.today()
+        amanha = hoje + timedelta(days=1)
+        daqui_tres_dias = hoje + timedelta(days=3)
+        gerenciador.criar_reserva(c1.id_unico, 101, hoje, amanha)
+        # Tentativa de reservar quarto em manutenção (deve falhar no gerenciador)
+        # gerenciador.criar_reserva(c2.id_unico, 202, amanha, daqui_tres_dias)
+        gerenciador.criar_reserva(c2.id_unico, 102, amanha, daqui_tres_dias)
+    except Exception as e:
+        print(f"Erro ao criar reservas iniciais: {e}")
+
+# --- Funções Auxiliares da Interface ---
+def mostrar_snackbar(page: ft.Page, mensagem: str, error: bool = False):
+    """Exibe uma mensagem rápida na parte inferior da tela."""
+    page.show_snack_bar(
+        ft.SnackBar(
+            ft.Text(mensagem),
+            bgcolor=ft.colors.RED_ACCENT_700 if error else ft.colors.GREEN_700,
+            open=True
+        )
+    )
+
+# --- Componentes Reutilizáveis da Interface ---
+
+# --- Telas (Views) da Aplicação ---
+
+def criar_tela_inicial(page: ft.Page) -> ft.View:
+    """Cria a View da tela inicial."""
+    print("Criando Tela Inicial")
+    quartos_disponiveis = gerenciador.listar_quartos() # Lista todos por padrão
+
+    lista_quartos_ui = ft.ListView(expand=True, spacing=10)
+    if quartos_disponiveis:
+        for quarto in quartos_disponiveis:
+            cor_status = ft.colors.GREEN_500 if quarto.esta_disponivel() else (ft.colors.RED_500 if quarto.status_disponibilidade == 'ocupado' else ft.colors.ORANGE_500)
+            lista_quartos_ui.controls.append(
+                ft.Card(
+                    ft.Container(
+                        padding=10,
+                        content=ft.Column([
+                            ft.Text(f"Quarto {quarto.numero} ({quarto.tipo.capitalize()})", weight=ft.FontWeight.BOLD),
+                            ft.Text(f"Preço: R$ {quarto.preco_diaria:.2f}/noite"),
+                            ft.Row([
+                                ft.Text("Status:"),
+                                ft.Text(quarto.status_disponibilidade.capitalize(), color=cor_status, weight=ft.FontWeight.BOLD)
+                            ])
+                        ])
+                    )
+                )
+            )
+    else:
+        lista_quartos_ui.controls.append(ft.Text("Nenhum quarto cadastrado."))
+
+    return ft.View(
+        "/", # Rota da View
+        controls=[
+            ft.AppBar(title=ft.Text("Refúgio dos Sonhos - Início"), bgcolor=ft.colors.SURFACE_VARIANT),
+            ft.Padding(padding=10, content=ft.Text("Quartos:", style=ft.TextThemeStyle.HEADLINE_SMALL)),
+            ft.Container(content=lista_quartos_ui, expand=True, padding=ft.padding.only(left=10, right=10, bottom=10)),
+            ft.Padding(padding=10, content=
+                ft.Row(
+                    controls=[
+                        ft.ElevatedButton("Nova Reserva", icon=ft.icons.ADD_CIRCLE_OUTLINE, on_click=lambda _: page.go("/nova_reserva")),
+                        ft.ElevatedButton("Gerenciar Clientes", icon=ft.icons.PEOPLE_OUTLINE, on_click=lambda _: page.go("/clientes")),
+                        ft.ElevatedButton("Ver Reservas", icon=ft.icons.LIST_ALT_OUTLINED, on_click=lambda _: page.go("/reservas")),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_AROUND
+                )
+           )
+        ],
+        vertical_alignment=ft.MainAxisAlignment.START,
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER
+    )
+
+def criar_tela_gerenciar_clientes(page: ft.Page) -> ft.View:
+    """Cria a View para gerenciar clientes."""
+    print("Criando Tela Gerenciar Clientes")
+
+    # Campos do formulário para adicionar novo cliente
+    txt_nome = ft.TextField(label="Nome Completo", width=300)
+    txt_telefone = ft.TextField(label="Telefone (ex: (XX) XXXXX-XXXX)", width=200)
+    txt_email = ft.TextField(label="E-mail", width=300)
+
+    # Tabela para exibir clientes
+    tabela_clientes = ft.DataTable(
+        columns=[
+            ft.DataColumn(ft.Text("Nome")),
+            ft.DataColumn(ft.Text("Telefone")),
+            ft.DataColumn(ft.Text("E-mail")),
+            ft.DataColumn(ft.Text("ID Cliente")),
+            # ft.DataColumn(ft.Text("Ações")), # Para Editar/Excluir no futuro
+        ],
+        rows=[], # Será preenchida dinamicamente
+        expand=True,
+        # border=ft.border.all(1, ft.colors.BLACK26),
+        # horizontal_lines=ft.border.BorderSide(1, ft.colors.BLACK12),
+        # vertical_lines=ft.border.BorderSide(1, ft.colors.BLACK12),
+    )
+
+    def preencher_tabela_clientes():
+        """Atualiza as linhas da tabela de clientes."""
+        tabela_clientes.rows.clear()
+        clientes = gerenciador.listar_clientes()
+        for cliente in clientes:
+            tabela_clientes.rows.append(
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(cliente.nome)),
+                        ft.DataCell(ft.Text(cliente.telefone)),
+                        ft.DataCell(ft.Text(cliente.email)),
+                        ft.DataCell(ft.Text(cliente.id_unico[:8] + "...")), # Mostra só parte do ID
+                        # ft.DataCell(ft.Row([ft.IconButton(ft.icons.EDIT), ft.IconButton(ft.icons.DELETE)])),
+                    ]
+                )
+            )
+        # Se a view já estiver na página, atualiza a tabela
+        if page.views and page.views[-1].route == "/clientes":
+             tabela_clientes.update()
+
+
+    def adicionar_cliente_click(e):
+        """Callback para o botão de adicionar cliente."""
+        nome = txt_nome.value.strip()
+        telefone = txt_telefone.value.strip()
+        email = txt_email.value.strip().lower()
+
+        if not nome or not telefone or not email:
+            mostrar_snackbar(page, "Erro: Preencha todos os campos!", error=True)
+            return
+
+        try:
+            novo_cliente = Cliente(nome=nome, telefone=telefone, email=email)
+            sucesso = gerenciador.adicionar_cliente(novo_cliente)
+            if sucesso:
+                mostrar_snackbar(page, f"Cliente '{nome}' adicionado com sucesso!")
+                # Limpar campos
+                txt_nome.value = ""
+                txt_telefone.value = ""
+                txt_email.value = ""
+                # Atualizar tabela
+                preencher_tabela_clientes()
+                # Atualizar campos e tabela na interface
+                txt_nome.update()
+                txt_telefone.update()
+                txt_email.update()
+            else:
+                # O gerenciador já imprime o erro específico (ID/Email duplicado)
+                mostrar_snackbar(page, "Erro ao adicionar cliente (verifique console ou dados duplicados).", error=True)
+        except (ValueError, TypeError) as ex:
+             mostrar_snackbar(page, f"Erro nos dados do cliente: {ex}", error=True)
+
+
+    # Preenche a tabela inicialmente
+    preencher_tabela_clientes()
+
+    return ft.View(
+        "/clientes",
+        controls=[
+            ft.AppBar(title=ft.Text("Gerenciar Clientes"), bgcolor=ft.colors.SURFACE_VARIANT),
+            ft.Padding(padding=10, content=
+                ft.Column([
+                    ft.Text("Adicionar Novo Cliente", style=ft.TextThemeStyle.TITLE_MEDIUM),
+                    txt_nome,
+                    txt_telefone,
+                    txt_email,
+                    ft.ElevatedButton("Adicionar Cliente", icon=ft.icons.ADD, on_click=adicionar_cliente_click)
+                ])
+            ),
+            ft.Divider(),
+            ft.Padding(padding=10, content=
+                ft.Column([
+                    ft.Text("Clientes Cadastrados", style=ft.TextThemeStyle.TITLE_MEDIUM),
+                    ft.Container(content=tabela_clientes, expand=True) # Container para permitir expansão
+                ], expand=True) # Column expande para preencher espaço
+            )
+        ],
+        # Garante que a AppBar não oculte o botão Voltar padrão do Flet
+        # Se quiser um botão customizado, adicione-o ao AppBar.leading
+    )
+
+
+def criar_tela_nova_reserva(page: ft.Page) -> ft.View:
+    """Cria a View para realizar uma nova reserva."""
+    print("Criando Tela Nova Reserva")
+
+    # --- Controles do Formulário ---
+    dropdown_cliente = ft.Dropdown(
+        label="Selecione o Cliente",
+        options=[
+            ft.dropdown.Option(cliente.id_unico, cliente.nome) # key=id, text=nome
+            for cliente in gerenciador.listar_clientes()
+        ],
+        width=400
+    )
+
+    dropdown_quarto = ft.Dropdown(
+        label="Selecione o Quarto Disponível",
+        options=[
+            ft.dropdown.Option(str(quarto.numero), f"Quarto {quarto.numero} ({quarto.tipo.capitalize()}) - R${quarto.preco_diaria:.2f}")
+            for quarto in gerenciador.listar_quartos() # Lista todos inicialmente
+            # A disponibilidade real será verificada no momento da reserva
+        ],
+        width=400
+    )
+
+    # Seletores de Data
+    data_checkin_selecionada = ft.Text("Selecione...")
+    data_checkout_selecionada = ft.Text("Selecione...")
+    data_checkin_val: Optional[date] = None
+    data_checkout_val: Optional[date] = None
+
+    def atualizar_data_checkin(e):
+        nonlocal data_checkin_val
+        data_checkin_val = date.fromisoformat(e.control.value.strftime('%Y-%m-%d')) if e.control.value else None
+        data_checkin_selecionada.value = data_checkin_val.strftime('%d/%m/%Y') if data_checkin_val else "Selecione..."
+        data_checkin_selecionada.update()
+        print(f"Data Check-in selecionada: {data_checkin_val}")
+
+    def atualizar_data_checkout(e):
+        nonlocal data_checkout_val
+        data_checkout_val = date.fromisoformat(e.control.value.strftime('%Y-%m-%d')) if e.control.value else None
+        data_checkout_selecionada.value = data_checkout_val.strftime('%d/%m/%Y') if data_checkout_val else "Selecione..."
+        data_checkout_selecionada.update()
+        print(f"Data Check-out selecionada: {data_checkout_val}")
+
+    date_picker_checkin = ft.DatePicker(
+        on_change=atualizar_data_checkin,
+        first_date=datetime.now() - timedelta(days=0), # A partir de hoje
+        last_date=datetime.now() + timedelta(days=365), # Até 1 ano no futuro
+        help_text="Selecione a data de check-in"
+    )
+    date_picker_checkout = ft.DatePicker(
+        on_change=atualizar_data_checkout,
+        first_date=datetime.now() - timedelta(days=0),
+        last_date=datetime.now() + timedelta(days=365*2), # Permite estadias mais longas
+        help_text="Selecione a data de check-out"
+    )
+
+    # Registra os pickers na página (necessário para funcionar)
+    page.overlay.append(date_picker_checkin)
+    page.overlay.append(date_picker_checkout)
+
+    def confirmar_reserva_click(e):
+        """Callback para o botão de confirmar reserva."""
+        id_cliente = dropdown_cliente.value
+        numero_quarto_str = dropdown_quarto.value
+        checkin = data_checkin_val
+        checkout = data_checkout_val
+
+        if not id_cliente or not numero_quarto_str or not checkin or not checkout:
+            mostrar_snackbar(page, "Erro: Preencha todos os campos (Cliente, Quarto, Datas)!", error=True)
+            return
+
+        try:
+            numero_quarto = int(numero_quarto_str)
+            reserva_criada = gerenciador.criar_reserva(id_cliente, numero_quarto, checkin, checkout)
+
+            if reserva_criada:
+                mostrar_snackbar(page, f"Reserva para {reserva_criada.cliente.nome} no quarto {numero_quarto} confirmada!")
+                # Limpar campos? Ou ir para lista de reservas?
+                dropdown_cliente.value = None
+                dropdown_quarto.value = None
+                nonlocal data_checkin_val, data_checkout_val
+                data_checkin_val = None
+                data_checkout_val = None
+                data_checkin_selecionada.value = "Selecione..."
+                data_checkout_selecionada.value = "Selecione..."
+                # Atualizar interface
+                dropdown_cliente.update()
+                dropdown_quarto.update()
+                data_checkin_selecionada.update()
+                data_checkout_selecionada.update()
+                # Opcional: Navegar para a tela de reservas
+                # page.go("/reservas")
+            else:
+                # O gerenciador já deve ter impresso o erro específico
+                mostrar_snackbar(page, "Erro ao criar reserva (verifique console ou disponibilidade).", error=True)
+
+        except ValueError:
+            mostrar_snackbar(page, "Erro: Número do quarto inválido.", error=True)
+        except Exception as ex:
+            mostrar_snackbar(page, f"Erro inesperado: {ex}", error=True)
+
+
+    return ft.View(
+        "/nova_reserva",
+        controls=[
+            ft.AppBar(title=ft.Text("Criar Nova Reserva"), bgcolor=ft.colors.SURFACE_VARIANT),
+            ft.Padding(padding=20, content=
+                ft.Column(
+                    controls=[
+                        dropdown_cliente,
+                        ft.Divider(height=10, color=ft.colors.TRANSPARENT),
+                        dropdown_quarto,
+                        ft.Divider(height=20, color=ft.colors.TRANSPARENT),
+                        ft.Text("Período da Estadia:", style=ft.TextThemeStyle.TITLE_MEDIUM),
+                        ft.Row([
+                            ft.Text("Check-in:"),
+                            data_checkin_selecionada,
+                            ft.IconButton(
+                                ft.icons.CALENDAR_MONTH,
+                                tooltip="Selecionar data de Check-in",
+                                on_click=lambda _: date_picker_checkin.pick_date(),
+                            )
+                        ], alignment=ft.MainAxisAlignment.START),
+                        ft.Row([
+                             ft.Text("Check-out:"),
+                             data_checkout_selecionada,
+                             ft.IconButton(
+                                ft.icons.CALENDAR_MONTH,
+                                tooltip="Selecionar data de Check-out",
+                                on_click=lambda _: date_picker_checkout.pick_date(),
+                            )
+                        ], alignment=ft.MainAxisAlignment.START),
+                        ft.Divider(height=30, color=ft.colors.TRANSPARENT),
+                        ft.ElevatedButton(
+                            "Confirmar Reserva",
+                            icon=ft.icons.CHECK_CIRCLE_OUTLINE,
+                            on_click=confirmar_reserva_click,
+                            width=250
+                        )
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=15
+                )
+            )
+        ]
+    )
+
+
+def criar_tela_visualizar_reservas(page: ft.Page) -> ft.View:
+    """Cria a View para visualizar e cancelar reservas."""
+    print("Criando Tela Visualizar Reservas")
+
+    # Atualiza status de reservas que já terminaram
+    gerenciador.atualizar_status_reservas_concluidas()
+
+    lista_reservas = gerenciador.listar_reservas() # Pega todas as reservas
+
+    # ListView para exibir as reservas
+    reservas_ui = ft.ListView(expand=True, spacing=10, padding=10)
+
+    def cancelar_reserva_click(reserva_id: str):
+        """Callback para o botão de cancelar."""
+        confirm_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Confirmar Cancelamento"),
+            content=ft.Text(f"Tem certeza que deseja cancelar a reserva ID {reserva_id[:8]}...?"),
+            actions=[
+                ft.TextButton("Sim", on_click=lambda _: confirmar_cancelamento(reserva_id)),
+                ft.TextButton("Não", on_click=lambda _: fechar_dialog(confirm_dialog)),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        page.dialog = confirm_dialog
+        confirm_dialog.open = True
+        page.update()
+
+    def fechar_dialog(dialog: ft.AlertDialog):
+        dialog.open = False
+        page.update()
+
+    def confirmar_cancelamento(reserva_id: str):
+        sucesso = gerenciador.cancelar_reserva(reserva_id)
+        if sucesso:
+            mostrar_snackbar(page, f"Reserva {reserva_id[:8]}... cancelada.")
+            # Recria a view para atualizar a lista (ou atualiza a lista_reservas_ui dinamicamente)
+            page.go("/reservas") # Recarrega a view
+        else:
+            mostrar_snackbar(page, f"Erro ao cancelar reserva {reserva_id[:8]}...", error=True)
+        fechar_dialog(page.dialog)
+
+
+    if lista_reservas:
+        for reserva in lista_reservas:
+            cor_status = {
+                "confirmada": ft.colors.GREEN_700,
+                "cancelada": ft.colors.RED_700,
+                "concluída": ft.colors.GREY_700,
+                "pendente": ft.colors.ORANGE_700,
+            }.get(reserva.status_reserva, ft.colors.BLACK)
+
+            botao_cancelar = ft.IconButton(
+                    icon=ft.icons.CANCEL_OUTLINED,
+                    tooltip="Cancelar Reserva",
+                    icon_color=ft.colors.RED_ACCENT_700,
+                    data=reserva.reserva_id, # Guarda o ID da reserva no botão
+                    on_click=lambda e: cancelar_reserva_click(e.control.data),
+                    visible=(reserva.status_reserva == "confirmada") # Só mostra se pode cancelar
+            )
+
+            reservas_ui.controls.append(
+                ft.Card(
+                    ft.Container(
+                        padding=15,
+                        content=ft.Row(
+                            [
+                                ft.Column(
+                                    [
+                                        ft.Text(f"ID: {reserva.reserva_id[:8]}...", size=12, color=ft.colors.SECONDARY),
+                                        ft.Text(f"Cliente: {reserva.cliente.nome}", weight=ft.FontWeight.BOLD),
+                                        ft.Text(f"Quarto: {reserva.quarto.numero} ({reserva.quarto.tipo.capitalize()})"),
+                                        ft.Text(f"Período: {reserva.data_checkin.strftime('%d/%m/%y')} a {reserva.data_checkout.strftime('%d/%m/%y')}"),
+                                        ft.Row([
+                                            ft.Text("Status: "),
+                                            ft.Text(reserva.status_reserva.capitalize(), color=cor_status, weight=ft.FontWeight.BOLD)
+                                        ]),
+                                    ],
+                                    expand=True # Coluna ocupa espaço disponível
+                                ),
+                                botao_cancelar # Botão fica à direita
+                            ],
+                           alignment=ft.MainAxisAlignment.SPACE_BETWEEN # Alinha coluna à esquerda e botão à direita
+                        )
+                    )
+                )
+            )
+    else:
+        reservas_ui.controls.append(ft.Text("Nenhuma reserva encontrada."))
+
+
+    return ft.View(
+        "/reservas",
+        controls=[
+            ft.AppBar(title=ft.Text("Visualizar Reservas"), bgcolor=ft.colors.SURFACE_VARIANT),
+            ft.Container(content=reservas_ui, expand=True) # Container para expandir a lista
+        ]
+    )
+
+
+# --- Função Principal da Aplicação Flet ---
+def main(page: ft.Page):
+    page.title = "Sistema de Reservas - Refúgio dos Sonhos"
+    page.vertical_alignment = ft.MainAxisAlignment.START
+    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+    # page.theme_mode = ft.ThemeMode.LIGHT # Ou DARK
+
+    # Carrega dados iniciais (se necessário)
+    if not gerenciador.listar_clientes(): # Carrega só se estiver vazio
+        print("Carregando dados iniciais...")
+        carregar_dados_iniciais()
+        print("Dados carregados.")
+
+    # --- Lógica de Roteamento ---
+    def route_change(route):
+        print(f"Mudando para rota: {page.route}")
+        page.views.clear() # Limpa as views existentes
+
+        # Adiciona a view correspondente à rota
+        if page.route == "/":
+            page.views.append(criar_tela_inicial(page))
+        elif page.route == "/clientes":
+            page.views.append(criar_tela_gerenciar_clientes(page))
+        elif page.route == "/nova_reserva":
+             page.views.append(criar_tela_nova_reserva(page))
+        elif page.route == "/reservas":
+            page.views.append(criar_tela_visualizar_reservas(page))
+        else:
+             # Rota não encontrada, volta para o início
+             page.views.append(criar_tela_inicial(page))
+
+
+        page.update()
+
+    def view_pop(view):
+        """Chamado quando o botão 'voltar' do Flet (ou do OS) é pressionado."""
+        print("Voltando da view:", view.route)
+        page.views.pop()
+        top_view = page.views[-1]
+        page.go(top_view.route) # Navega para a rota da view anterior
+
+    # Define os handlers de rota e pop
+    page.on_route_change = route_change
+    page.on_view_pop = view_pop
+
+    # Define a rota inicial
+    page.go("/")
+
+
+# --- Execução da Aplicação ---
+if __name__ == "__main__":
+    ft.app(target=main)
+    # Para rodar como web app (opcional):
+    # ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8080)
