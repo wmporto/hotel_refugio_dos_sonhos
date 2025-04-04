@@ -90,11 +90,12 @@ def criar_tela_inicial(page: ft.Page) -> ft.View:
         lista_quartos_ui.controls.append(ft.Text("Nenhum quarto cadastrado."))
 
     return ft.View(
-        "/", # Rota da View
+        "/",
         controls=[
-            # CORREÇÃO: Use ft.Colors
-            ft.AppBar(title=ft.Text("Refúgio dos Sonhos - Início"), bgcolor=page.theme.color_scheme.surface_variant),
-            ft.Padding(padding=ft.padding.all(10), content=ft.Text("Quartos:", style=ft.TextThemeStyle.HEADLINE_SMALL)),
+            # CORREÇÃO: Usar NOME da cor do tema como string
+            ft.AppBar(title=ft.Text("Refúgio dos Sonhos - Início"), bgcolor="surfaceVariant"),
+            # ... (restante dos controles ok) ...
+             ft.Padding(padding=ft.padding.all(10), content=ft.Text("Quartos:", style=ft.TextThemeStyle.HEADLINE_SMALL)),
             ft.Container(content=lista_quartos_ui, expand=True, padding=ft.padding.only(left=10, right=10, bottom=10)),
             ft.Padding(padding=ft.padding.all(10), content=
                 ft.Row(
@@ -183,8 +184,9 @@ def criar_tela_gerenciar_clientes(page: ft.Page) -> ft.View:
     return ft.View(
         "/clientes",
         controls=[
-            # CORREÇÃO: Usar cor do TEMA para surface_variant
-            ft.AppBar(title=ft.Text("Gerenciar Clientes"), bgcolor=page.theme.color_scheme.surface_variant),
+            # CORREÇÃO: Usar NOME da cor do tema como string
+            ft.AppBar(title=ft.Text("Gerenciar Clientes"), bgcolor="surfaceVariant"),
+            # ... (restante dos controles ok) ...
             ft.Padding(padding=ft.padding.all(10), content=
                 ft.Column([
                     ft.Text("Adicionar Novo Cliente", style=ft.TextThemeStyle.TITLE_MEDIUM),
@@ -298,19 +300,18 @@ def criar_tela_nova_reserva(page: ft.Page) -> ft.View:
         except Exception as ex:
             mostrar_snackbar(page, f"Erro inesperado: {ex}", error=True)
 
-        return ft.View(
+    return ft.View(
         "/nova_reserva",
         controls=[
-             # CORREÇÃO: Usar cor do TEMA para surface_variant
-            ft.AppBar(title=ft.Text("Criar Nova Reserva"), bgcolor=page.theme.color_scheme.surface_variant),
+            # CORREÇÃO: Usar NOME da cor do tema como string
+            ft.AppBar(title=ft.Text("Criar Nova Reserva"), bgcolor="surfaceVariant"),
+            # ... (restante dos controles ok) ...
             ft.Padding(padding=ft.padding.all(20), content=
                 ft.Column(
                     controls=[
                         dropdown_cliente,
-                        # CORREÇÃO: Use ft.Colors
                         ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
                         dropdown_quarto,
-                        # CORREÇÃO: Use ft.Colors
                         ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
                         ft.Text("Período da Estadia:", style=ft.TextThemeStyle.TITLE_MEDIUM),
                         ft.Row([
@@ -331,7 +332,6 @@ def criar_tela_nova_reserva(page: ft.Page) -> ft.View:
                                 on_click=lambda _: date_picker_checkout.pick_date(),
                             )
                         ], alignment=ft.MainAxisAlignment.START),
-                        # CORREÇÃO: Use ft.Colors
                         ft.Divider(height=30, color=ft.Colors.TRANSPARENT),
                         ft.ElevatedButton(
                             "Confirmar Reserva",
@@ -443,7 +443,7 @@ def criar_tela_visualizar_reservas(page: ft.Page) -> ft.View:
         "/reservas",
         controls=[
             # CORREÇÃO: Use ft.Colors
-            ft.AppBar(title=ft.Text("Visualizar Reservas"), bgcolor=page.theme.color_scheme.surface_variant),
+            ft.AppBar(title=ft.Text("Visualizar Reservas"), bgcolor="surfaceVariant"),
             ft.Container(content=reservas_ui, expand=True)
         ]
     )
@@ -454,10 +454,9 @@ def main(page: ft.Page):
     page.title = "Sistema de Reservas - Refúgio dos Sonhos"
     page.vertical_alignment = ft.MainAxisAlignment.START
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-    # Adiciona configuração do tema (opcional, mas bom para garantir que color_scheme exista)
-    page.theme = ft.Theme() # Usa o tema padrão
-    page.dark_theme = ft.Theme() # Pode configurar um tema escuro também
-    # page.theme_mode = ft.ThemeMode.SYSTEM # Ou LIGHT, DARK
+    page.theme = ft.Theme()
+    page.dark_theme = ft.Theme()
+    # page.theme_mode = ft.ThemeMode.SYSTEM
 
     if not gerenciador.listar_clientes():
         print("Carregando dados iniciais...")
@@ -466,11 +465,11 @@ def main(page: ft.Page):
 
     # --- Lógica de Roteamento ---
     def route_change(route):
-        print(f"Mudando para rota: {page.route}")
+        # Mensagem movida para o final para indicar sucesso ou falha
+        # print(f"Mudando para rota: {page.route}")
         page.views.clear()
 
-    try:
-            # --- IMPORTANTE: Acessar page.theme só é seguro *depois* que main foi chamada ---
+        try:
             if page.route == "/":
                 page.views.append(criar_tela_inicial(page))
             elif page.route == "/clientes":
@@ -481,26 +480,28 @@ def main(page: ft.Page):
                 page.views.append(criar_tela_visualizar_reservas(page))
             else:
                  print(f"Rota desconhecida: {page.route}. Redirecionando para /")
-                 page.views.append(criar_tela_inicial(page)) # Cria a inicial como fallback
+                 page.views.append(criar_tela_inicial(page))
 
             page.update()
+            print(f"View para rota {page.route} construída e exibida com sucesso.") # Mensagem de sucesso
 
-    except Exception as e:
+        except Exception as e:
             print(f"Erro CRÍTICO ao construir a view para a rota {page.route}: {e}")
-            # Tenta exibir uma tela de erro simples
             try:
-                page.views.clear() # Limpa qualquer coisa parcialmente construída
-                # Usa cores estáticas aqui para garantir que funcione mesmo se o tema falhar
+                page.views.clear()
                 page.views.append(ft.View("/", [
-                        ft.AppBar(title=ft.Text("Erro"), bgcolor=ft.Colors.RED_700),
+                        ft.AppBar(title=ft.Text("Erro"), bgcolor=ft.Colors.RED_700), # Cor estática OK
                         ft.Text(f"Ocorreu um erro ao carregar a página '{page.route}':"),
                         ft.Text(str(e))
-                    ], bgcolor=ft.Colors.BACKGROUND) # Cor de fundo estática
+                    ],
+                    # CORREÇÃO: Usar cor estática para background da tela de erro
+                    bgcolor=ft.Colors.WHITE)
                 )
                 page.update()
+                print(f"Tela de erro exibida para a falha na rota {page.route}.") # Mensagem de fallback
             except Exception as inner_e:
-                 print(f"Erro ao tentar exibir a tela de erro: {inner_e}")
-                 # Se nem a tela de erro funcionar, não há muito mais a fazer na UI
+                 print(f"Erro GRAVE ao tentar exibir a tela de erro: {inner_e}")
+
 
     def view_pop(view):
         """Chamado quando o botão 'voltar' do Flet (ou do OS) é pressionado."""
