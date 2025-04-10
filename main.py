@@ -264,9 +264,6 @@ class GerenciadorDeReservas:
         if not cliente or not quarto:
             return None
         
-        if not quarto.disponivel:
-            return None
-        
         # Verificar se o quarto está disponível nas datas solicitadas
         if not self._verificar_disponibilidade(quarto_numero, check_in, check_out):
             return None
@@ -274,8 +271,8 @@ class GerenciadorDeReservas:
         reserva = Reserva(cliente_id, quarto_numero, check_in, check_out)
         self._reservas.append(reserva)
         
-        # Atualizar disponibilidade do quarto
-        quarto.disponivel = False
+        # Não marcamos o quarto como indisponível permanentemente
+        # Apenas verificamos a disponibilidade para o período específico
         
         self._salvar_dados()
         return reserva
@@ -286,13 +283,14 @@ class GerenciadorDeReservas:
             data_check_in = datetime.strptime(check_in, "%d-%m-%Y")
             data_check_out = datetime.strptime(check_out, "%d-%m-%Y")
         except ValueError:
+            print("Erro: formato de data inválido. Use DD-MM-AAAA.")
             return False
         
         # Verificar se check_out é posterior a check_in
         if data_check_out <= data_check_in:
             return False
         
-        # Verificar se há sobreposição com outras reservas
+        # Verificar se há sobreposição com outras reservas ativas (não canceladas)
         for reserva in self._reservas:
             if reserva.quarto_numero == quarto_numero and reserva.status != "Cancelada":
                 try:
@@ -304,10 +302,10 @@ class GerenciadorDeReservas:
                         return False
                 except ValueError:
                     # Se houver erro no formato da data, ignorar esta reserva
+                    print("Erro: formato de data inválido na reserva.")
                     continue
         
         return True
-    
     def obter_reserva_por_id(self, reserva_id: str) -> Optional[Reserva]:
         for reserva in self._reservas:
             if reserva.id == reserva_id:
@@ -317,12 +315,7 @@ class GerenciadorDeReservas:
     def atualizar_reserva(self, reserva_id: str, check_in: str, check_out: str, status: str) -> bool:
         reserva = self.obter_reserva_por_id(reserva_id)
         if reserva:
-            # Se estamos cancelando a reserva, liberar o quarto
-            if status == "Cancelada" and reserva.status != "Cancelada":
-                quarto = self.obter_quarto_por_numero(reserva.quarto_numero)
-                if quarto:
-                    quarto.disponivel = True
-            
+            # Atualizar os dados da reserva
             reserva.check_in = check_in
             reserva.check_out = check_out
             reserva.status = status
@@ -331,10 +324,12 @@ class GerenciadorDeReservas:
         return False
     
     def cancelar_reserva(self, reserva_id: str) -> bool:
-        return self.atualizar_reserva(reserva_id, 
-                                     self.obter_reserva_por_id(reserva_id).check_in,
-                                     self.obter_reserva_por_id(reserva_id).check_out,
-                                     "Cancelada")
+        reserva = self.obter_reserva_por_id(reserva_id)
+        if reserva:
+            reserva.status = "Cancelada"
+            self._salvar_dados()
+            return True
+        return False
     
     def listar_clientes(self) -> List[Cliente]:
         return self._clientes
@@ -342,8 +337,18 @@ class GerenciadorDeReservas:
     def listar_quartos(self) -> List[Quarto]:
         return self._quartos
     
-    def listar_quartos_disponiveis(self) -> List[Quarto]:
-        return [q for q in self._quartos if q.disponivel]
+    def listar_quartos_disponiveis(self, check_in: str = None, check_out: str = None) -> List[Quarto]:
+        # Se não foram fornecidas datas, retornar todos os quartos marcados como disponíveis
+        if not check_in or not check_out:
+            return [q for q in self._quartos if q.disponivel]
+        
+        # Se foram fornecidas datas, verificar disponibilidade para o período
+        quartos_disponiveis = []
+        for quarto in self._quartos:
+            if self._verificar_disponibilidade(quarto.numero, check_in, check_out):
+                quartos_disponiveis.append(quarto)
+        
+        return quartos_disponiveis
     
     def listar_reservas(self) -> List[Reserva]:
         return self._reservas
@@ -460,6 +465,13 @@ def main(page: ft.Page):
         lista_quartos.controls.clear()
         
         for quarto in gerenciador.listar_quartos():
+            # Verificar disponibilidade atual (considerando reservas ativas)
+            disponivel = gerenciador._verificar_disponibilidade(
+                quarto.numero, 
+                formatar_data(datetime.now()), 
+                formatar_data(datetime.now() + timedelta(days=1))
+            )
+            
             card_quarto = ft.Card(
                 content=ft.Container(
                     content=ft.Column([
@@ -468,8 +480,8 @@ def main(page: ft.Page):
                             title=ft.Text(f"Quarto {quarto.numero} - {quarto.tipo}"),
                             subtitle=ft.Text(f"Preço: R$ {quarto.preco:.2f} / diária"),
                             trailing=ft.Chip(
-                                label=ft.Text("Disponível" if quarto.disponivel else "Ocupado"),
-                                bgcolor=ft.colors.GREEN if quarto.disponivel else ft.colors.RED,
+                                label=ft.Text("Disponível" if disponivel else "Ocupado"),
+                                bgcolor=ft.colors.GREEN if disponivel else ft.colors.RED,
                             ),
                         ),
                         ft.Row([
@@ -561,20 +573,22 @@ def main(page: ft.Page):
     def atualizar_dropdown_clientes():
         dropdown_clientes.options.clear()
         
-        for cliente in gerenciador.listar_clientes():
-            dropdown_clientes.options.append(
-                ft.dropdown.Option(key=cliente.id, text=cliente.nome)
-            )
-        
-        if dropdown_clientes.options:
-            dropdown_clientes.value = dropdown_clientes.options[0].key
+        # Deixar o campo em branco
+        dropdown_clientes.value = None
         
         page.update()
     
     def atualizar_dropdown_quartos():
         dropdown_quartos.options.clear()
         
-        for quarto in gerenciador.listar_quartos_disponiveis():
+        # Usar as datas selecionadas para verificar disponibilidade
+        check_in = formatar_data(data_check_in.current)
+        check_out = formatar_data(data_check_out.current)
+        
+        # Obter quartos disponíveis para o período selecionado
+        quartos_disponiveis = gerenciador.listar_quartos_disponiveis(check_in, check_out)
+        
+        for quarto in quartos_disponiveis:
             dropdown_quartos.options.append(
                 ft.dropdown.Option(
                     key=str(quarto.numero),
@@ -582,8 +596,13 @@ def main(page: ft.Page):
                 )
             )
         
+        # Deixar o campo em branco
+        dropdown_quartos.value = None
+        
         if dropdown_quartos.options:
             dropdown_quartos.value = dropdown_quartos.options[0].key
+        else:
+            dropdown_quartos.value = None
         
         page.update()
     
@@ -746,6 +765,9 @@ def main(page: ft.Page):
         else:
             # Criar novo cliente
             cliente = Cliente(nome, telefone, email)
+             
+            # Criar novo cliente
+            cliente = Cliente(nome, telefone, email)
             gerenciador.adicionar_cliente(cliente)
             mostrar_snackbar("Cliente adicionado com sucesso!")
         
@@ -791,6 +813,8 @@ def main(page: ft.Page):
         def handle_date_picker_change(e):
             data_check_in.current = e.control.value
             texto_check_in.value = f"Check-in: {formatar_data(data_check_in.current)}"
+            # Atualizar a lista de quartos disponíveis quando a data mudar
+            atualizar_dropdown_quartos()
             page.update()
         
         # Abrir o DatePicker
@@ -807,6 +831,8 @@ def main(page: ft.Page):
         def handle_date_picker_change(e):
             data_check_out.current = e.control.value
             texto_check_out.value = f"Check-out: {formatar_data(data_check_out.current)}"
+            # Atualizar a lista de quartos disponíveis quando a data mudar
+            atualizar_dropdown_quartos()
             page.update()
         
         # Abrir o DatePicker
@@ -973,10 +999,12 @@ def main(page: ft.Page):
     
     def cancelar_reserva(reserva):
         def confirmar_cancelamento(e):
-            gerenciador.cancelar_reserva(reserva.id)
-            mostrar_snackbar("Reserva cancelada com sucesso!")
-            atualizar_lista_reservas()
-            fechar_dialogo(e)
+            if gerenciador.cancelar_reserva(reserva.id):
+                mostrar_snackbar("Reserva cancelada com sucesso!")
+                atualizar_lista_reservas()
+                fechar_dialogo(e)
+            else:
+                mostrar_snackbar("Erro ao cancelar a reserva!")
         
         def fechar_dialogo(e):
             dialogo.open = False
@@ -1097,15 +1125,17 @@ def main(page: ft.Page):
     def mostrar_formulario_reserva():
         # Atualizar dropdowns
         atualizar_dropdown_clientes()
-        atualizar_dropdown_quartos()
         
         # Inicializar datas
         data_check_in.current = datetime.now()
         data_check_out.current = datetime.now() + timedelta(days=1)
         
         # Atualizar textos
-        texto_check_in.value = f"Check-in: {formatar_data(data_check_in.current)}"
-        texto_check_out.value = f"Check-out: {formatar_data(data_check_out.current)}"
+        texto_check_in.value = ""
+        texto_check_out.value = ""
+        
+        # Atualizar quartos disponíveis para as datas selecionadas
+        atualizar_dropdown_quartos()
         
         botao_salvar = ft.ElevatedButton(
             text="Fazer Reserva",
@@ -1125,7 +1155,6 @@ def main(page: ft.Page):
             ft.Container(
                 content=ft.Column([
                     dropdown_clientes,
-                    dropdown_quartos,
                     ft.Row([
                         ft.Column([
                             ft.Text("Check-in:"),
@@ -1146,6 +1175,8 @@ def main(page: ft.Page):
                             )
                         ])
                     ]),
+                    ft.Text("Quartos disponíveis para o período selecionado:", weight=ft.FontWeight.BOLD),
+                    dropdown_quartos,
                     ft.Row([
                         botao_cancelar,
                         botao_salvar
