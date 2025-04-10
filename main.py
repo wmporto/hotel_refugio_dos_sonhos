@@ -61,56 +61,88 @@ def mostrar_snackbar(page: ft.Page, mensagem: str, error: bool = False):
 
 # --- Telas (Views) da Aplicação ---
 
+# Cole ESTA função inteira no lugar da sua função criar_tela_inicial existente
+
 def criar_tela_inicial(page: ft.Page) -> ft.View:
     """Cria a View da tela inicial."""
-    print("Criando Tela Inicial")
-    quartos_disponiveis = gerenciador.listar_quartos() # Lista todos por padrão
+    print("--- Executando criar_tela_inicial ---") # Adicionando log extra
+    try: # Adicionando try-except interno para isolar mais o erro
+        quartos_disponiveis = gerenciador.listar_quartos()
 
-    lista_quartos_ui = ft.ListView(expand=True, spacing=10)
-    if quartos_disponiveis:
-        for quarto in quartos_disponiveis:
-            # CORREÇÃO: Use ft.Colors
-            cor_status = ft.Colors.GREEN_500 if quarto.esta_disponivel() else (ft.Colors.RED_500 if quarto.status_disponibilidade == 'ocupado' else ft.Colors.ORANGE_500)
-            lista_quartos_ui.controls.append(
-                ft.Card(
-                    ft.Container(
-                        padding=ft.padding.all(10),
-                        content=ft.Column([
-                            ft.Text(f"Quarto {quarto.numero} ({quarto.tipo.capitalize()})", weight=ft.FontWeight.BOLD),
-                            ft.Text(f"Preço: R$ {quarto.preco_diaria:.2f}/noite"),
-                            ft.Row([
-                                ft.Text("Status:"),
-                                ft.Text(quarto.status_disponibilidade.capitalize(), color=cor_status, weight=ft.FontWeight.BOLD)
+        lista_quartos_ui = ft.ListView(expand=True, spacing=10)
+        if quartos_disponiveis:
+            for quarto in quartos_disponiveis:
+                cor_status = ft.Colors.GREEN_500 if quarto.esta_disponivel() else (ft.Colors.RED_500 if quarto.status_disponibilidade == 'ocupado' else ft.Colors.ORANGE_500)
+                lista_quartos_ui.controls.append(
+                    ft.Card(
+                        ft.Container(
+                            padding=10, # Padding em Container está OK
+                            content=ft.Column([
+                                ft.Text(f"Quarto {quarto.numero} ({quarto.tipo.capitalize()})", weight=ft.FontWeight.BOLD),
+                                ft.Text(f"Preço: R$ {quarto.preco_diaria:.2f}/noite"),
+                                ft.Row([
+                                    ft.Text("Status:"),
+                                    ft.Text(quarto.status_disponibilidade.capitalize(), color=cor_status, weight=ft.FontWeight.BOLD)
+                                ])
                             ])
-                        ])
+                        )
                     )
                 )
-            )
-    else:
-        lista_quartos_ui.controls.append(ft.Text("Nenhum quarto cadastrado."))
+        else:
+            lista_quartos_ui.controls.append(ft.Text("Nenhum quarto cadastrado."))
 
-    return ft.View(
-        "/",
-        controls=[
-            # CORREÇÃO: Usar NOME da cor do tema como string
-            ft.AppBar(title=ft.Text("Refúgio dos Sonhos - Início"), bgcolor="surfaceVariant"),
-            # ... (restante dos controles ok) ...
-             ft.Padding(padding=ft.padding.all(10), content=ft.Text("Quartos:", style=ft.TextThemeStyle.HEADLINE_SMALL)),
-            ft.Container(content=lista_quartos_ui, expand=True, padding=ft.padding.only(left=10, right=10, bottom=10)),
-            ft.Padding(padding=ft.padding.all(10), content=
-                ft.Row(
-                    controls=[
-                        ft.ElevatedButton("Nova Reserva", icon=ft.icons.ADD_CIRCLE_OUTLINE, on_click=lambda _: page.go("/nova_reserva")),
-                        ft.ElevatedButton("Gerenciar Clientes", icon=ft.icons.PEOPLE_OUTLINE, on_click=lambda _: page.go("/clientes")),
-                        ft.ElevatedButton("Ver Reservas", icon=ft.icons.LIST_ALT_OUTLINED, on_click=lambda _: page.go("/reservas")),
-                    ],
-                    alignment=ft.MainAxisAlignment.SPACE_AROUND
-                )
-           )
-        ],
-        vertical_alignment=ft.MainAxisAlignment.START,
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER
-    )
+        print("Controles da lista de quartos criados.")
+
+        # === PONTO CRÍTICO 1: Padding do Título ===
+        padding_titulo = ft.Padding(
+            padding=ft.padding.all(10),  # <<< DEVE SER ft.padding.all(10)
+            content=ft.Text("Quartos:", style=ft.TextThemeStyle.HEADLINE_SMALL)
+        )
+        print("Padding do título criado.")
+
+        # Container para a lista (padding aqui está correto)
+        container_lista = ft.Container(
+            content=lista_quartos_ui,
+            expand=True,
+            padding=ft.padding.only(left=10, right=10, bottom=10)
+        )
+        print("Container da lista criado.")
+
+        # === PONTO CRÍTICO 2: Padding dos Botões ===
+        padding_botoes = ft.Padding(
+            padding=ft.padding.all(10), # <<< DEVE SER ft.padding.all(10)
+            content=ft.Row(
+                controls=[
+                    ft.ElevatedButton("Nova Reserva", icon=ft.icons.ADD_CIRCLE_OUTLINE, on_click=lambda _: page.go("/nova_reserva")),
+                    ft.ElevatedButton("Gerenciar Clientes", icon=ft.icons.PEOPLE_OUTLINE, on_click=lambda _: page.go("/clientes")),
+                    ft.ElevatedButton("Ver Reservas", icon=ft.icons.LIST_ALT_OUTLINED, on_click=lambda _: page.go("/reservas")),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_AROUND
+            )
+        )
+        print("Padding dos botões criado.")
+
+        view_result = ft.View(
+            "/",
+            controls=[
+                ft.AppBar(title=ft.Text("Refúgio dos Sonhos - Início"), bgcolor="surfaceVariant"),
+                padding_titulo,    # Usando a variável criada
+                container_lista,   # Usando a variável criada
+                padding_botoes     # Usando a variável criada
+            ],
+            vertical_alignment=ft.MainAxisAlignment.START,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER
+        )
+        print("View inicial construída com sucesso.")
+        return view_result
+
+    except Exception as e_interno:
+        # Captura erro DENTRO da construção da view inicial
+        print(f"!!! Erro DENTRO de criar_tela_inicial: {e_interno}")
+        # Tenta retornar uma view de erro mínima, caso a construção principal falhe
+        return ft.View("/", [ft.Text(f"Erro ao criar tela inicial: {e_interno}")])
+
+# Não esqueça de remover a função criar_tela_inicial antiga!
 
 def criar_tela_gerenciar_clientes(page: ft.Page) -> ft.View:
     """Cria a View para gerenciar clientes."""
