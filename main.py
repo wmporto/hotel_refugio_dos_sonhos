@@ -283,7 +283,6 @@ class GerenciadorDeReservas:
             data_check_in = datetime.strptime(check_in, "%d-%m-%Y")
             data_check_out = datetime.strptime(check_out, "%d-%m-%Y")
         except ValueError:
-            print("Erro: formato de data inválido. Use DD-MM-AAAA.")
             return False
         
         # Verificar se check_out é posterior a check_in
@@ -302,10 +301,10 @@ class GerenciadorDeReservas:
                         return False
                 except ValueError:
                     # Se houver erro no formato da data, ignorar esta reserva
-                    print("Erro: formato de data inválido na reserva.")
                     continue
         
         return True
+    
     def obter_reserva_por_id(self, reserva_id: str) -> Optional[Reserva]:
         for reserva in self._reservas:
             if reserva.id == reserva_id:
@@ -410,7 +409,7 @@ def formatar_data(data: datetime) -> str:
 def main(page: ft.Page):
     # Configurações da página
     page.title = "Refúgio dos Sonhos - Sistema de Gerenciamento"
-    page.theme_mode = ft.ThemeMode.LIGHT
+    page.theme_mode = ft.ThemeMode.DARK
     page.window_width = 1000
     page.window_height = 800
     page.padding = 20
@@ -573,8 +572,13 @@ def main(page: ft.Page):
     def atualizar_dropdown_clientes():
         dropdown_clientes.options.clear()
         
-        # Deixar o campo em branco
-        dropdown_clientes.value = None
+        for cliente in gerenciador.listar_clientes():
+            dropdown_clientes.options.append(
+                ft.dropdown.Option(key=cliente.id, text=cliente.nome)
+            )
+        
+        if dropdown_clientes.options:
+            dropdown_clientes.value = dropdown_clientes.options[0].key
         
         page.update()
     
@@ -595,9 +599,6 @@ def main(page: ft.Page):
                     text=f"Quarto {quarto.numero} - {quarto.tipo} - R$ {quarto.preco:.2f}"
                 )
             )
-        
-        # Deixar o campo em branco
-        dropdown_quartos.value = None
         
         if dropdown_quartos.options:
             dropdown_quartos.value = dropdown_quartos.options[0].key
@@ -1065,7 +1066,7 @@ def main(page: ft.Page):
         
         conteudo_principal.content = ft.Column([
             ft.Row([
-                ft.Text("Gerenciamento de Clientes", size=24, weight=ft.FontWeight.BOLD)
+                ft.Text("Gerenciamento de Hóspedes", size=24, weight=ft.FontWeight.BOLD)
             ], alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([
                 ft.ElevatedButton(
@@ -1073,11 +1074,11 @@ def main(page: ft.Page):
                     icon=ft.icons.PERSON_ADD,
                     on_click=lambda e: navegar_para("novo_cliente")
                 )
-            ], alignment=ft.MainAxisAlignment.CENTER),
-            lista_clientes
-        ], alignment=ft.MainAxisAlignment.START, expand=True)
-        
-        page.update()
+            ], alignment=ft.MainAxisAlignment.CENTER)
+        ]),
+        lista_clientes
+    alignment=ft.MainAxisAlignment.START, expand=True
+    page.update()
     
     def mostrar_formulario_cliente():
         # Limpar campos se não estiver editando
@@ -1126,23 +1127,19 @@ def main(page: ft.Page):
         # Atualizar dropdowns
         atualizar_dropdown_clientes()
         
-        # Inicializar datas
-        data_check_in.current = datetime.now()
-        data_check_out.current = datetime.now() + timedelta(days=1)
-        
+        # Preencher com valor padrão
+        data_check_in.current = datetime.now().date()
+        data_check_out.current = datetime.now().date() + timedelta(days=1)
         # Atualizar textos
-        texto_check_in.value = ""
-        texto_check_out.value = ""
-        
-        # Atualizar quartos disponíveis para as datas selecionadas
-        atualizar_dropdown_quartos()
+        texto_check_in.value = f"Check-in: {formatar_data(data_check_in.current)}"
+        texto_check_out.value = f"Check-out: {formatar_data(data_check_out.current)}"
         
         # Atualizar quartos disponíveis para as datas selecionadas
         atualizar_dropdown_quartos()
         
         botao_salvar = ft.ElevatedButton(
             text="Fazer Reserva",
-            icon=ft.icons.BOOK_ONLINE,
+            icon=ft.icons.NEW_ICON,
             on_click=salvar_reserva
         )
         
@@ -1215,7 +1212,7 @@ def main(page: ft.Page):
     barra_navegacao = ft.AppBar(
         title=ft.Text("Refúgio dos Sonhos"),
         center_title=True,
-        bgcolor=ft.colors.BLUE_700,
+        bgcolor=ft.colors.BLUE,
         actions=[
             ft.IconButton(
                 icon=ft.icons.HOME,
