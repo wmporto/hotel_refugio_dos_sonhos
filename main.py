@@ -1137,6 +1137,9 @@ def main(page: ft.Page):
         # Atualizar quartos disponíveis para as datas selecionadas
         atualizar_dropdown_quartos()
         
+        # Atualizar quartos disponíveis para as datas selecionadas
+        atualizar_dropdown_quartos()
+        
         botao_salvar = ft.ElevatedButton(
             text="Fazer Reserva",
             icon=ft.icons.BOOK_ONLINE,
