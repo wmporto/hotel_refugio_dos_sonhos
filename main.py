@@ -1,7 +1,7 @@
 import flet as ft
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from typing import List, Dict, Optional, Any
 
@@ -283,8 +283,8 @@ class GerenciadorDeReservas:
     def _verificar_disponibilidade(self, quarto_numero: int, check_in: str, check_out: str) -> bool:
         # Converter strings para objetos datetime
         try:
-            data_check_in = datetime.strptime(check_in, "%Y-%m-%d")
-            data_check_out = datetime.strptime(check_out, "%Y-%m-%d")
+            data_check_in = datetime.strptime(check_in, "%d-%m-%Y")
+            data_check_out = datetime.strptime(check_out, "%d-%m-%Y")
         except ValueError:
             return False
         
@@ -295,12 +295,16 @@ class GerenciadorDeReservas:
         # Verificar se há sobreposição com outras reservas
         for reserva in self._reservas:
             if reserva.quarto_numero == quarto_numero and reserva.status != "Cancelada":
-                reserva_check_in = datetime.strptime(reserva.check_in, "%Y-%m-%d")
-                reserva_check_out = datetime.strptime(reserva.check_out, "%Y-%m-%d")
-                
-                # Verificar sobreposição
-                if (data_check_in < reserva_check_out and data_check_out > reserva_check_in):
-                    return False
+                try:
+                    reserva_check_in = datetime.strptime(reserva.check_in, "%d-%m-%Y")
+                    reserva_check_out = datetime.strptime(reserva.check_out, "%d-%m-%Y")
+                    
+                    # Verificar sobreposição
+                    if (data_check_in < reserva_check_out and data_check_out > reserva_check_in):
+                        return False
+                except ValueError:
+                    # Se houver erro no formato da data, ignorar esta reserva
+                    continue
         
         return True
     
@@ -391,117 +395,71 @@ class GerenciadorDeReservas:
         self._salvar_dados()
 
 
+# Função auxiliar para formatar data
+def formatar_data(data: datetime) -> str:
+    """Converte um objeto datetime para string no formato DD-MM-YYYY"""
+    return data.strftime("%d-%m-%Y")
+
+
 # Interface gráfica com Flet
-class HotelApp:
-    def __init__(self, page: ft.Page):
-        self.page = page
-        self.page.title = "Refúgio dos Sonhos - Sistema de Gerenciamento"
-        self.page.theme_mode = ft.ThemeMode.LIGHT
-        self.page.window_width = 1000
-        self.page.window_height = 800
-        self.page.padding = 20
-        
-        self.gerenciador = GerenciadorDeReservas()
-        
-        # Elementos da interface
-        self.tela_atual = "inicial"
-        
-        # Elementos para a tela inicial
-        self.lista_quartos = ft.ListView(expand=True, spacing=10, padding=20)
-        
-        # Elementos para o formulário de cliente
-        self.campo_nome = ft.TextField(label="Nome", width=300)
-        self.campo_telefone = ft.TextField(label="Telefone", width=300)
-        self.campo_email = ft.TextField(label="E-mail", width=300)
-        self.cliente_selecionado = None
-        
-        # Elementos para a lista de clientes
-        self.lista_clientes = ft.ListView(expand=True, spacing=10, padding=20)
-        
-        # Elementos para o formulário de reserva
-        self.dropdown_clientes = ft.Dropdown(label="Cliente", width=300)
-        self.dropdown_quartos = ft.Dropdown(label="Quarto", width=300)
-        self.campo_check_in = ft.TextField(label="Check-in (AAAA-MM-DD)", width=300)
-        self.campo_check_out = ft.TextField(label="Check-out (AAAA-MM-DD)", width=300)
-        
-        # Elementos para a lista de reservas
-        self.lista_reservas = ft.ListView(expand=True, spacing=10, padding=20)
-        
-        # Configurar a interface
-        self.configurar_interface()
+def main(page: ft.Page):
+    # Configurações da página
+    page.title = "Refúgio dos Sonhos - Sistema de Gerenciamento"
+    page.theme_mode = ft.ThemeMode.LIGHT
+    page.window_width = 1000
+    page.window_height = 800
+    page.padding = 20
     
-    def configurar_interface(self):
-        # Barra de navegação
-        barra_navegacao = ft.AppBar(
-            title=ft.Text("Refúgio dos Sonhos"),
-            center_title=True,
-            bgcolor=ft.colors.BLUE_700,
-            actions=[
-                ft.IconButton(
-                    icon=ft.icons.HOME,
-                    tooltip="Tela Inicial",
-                    on_click=lambda _: self.navegar_para("inicial")
-                ),
-                ft.IconButton(
-                    icon=ft.icons.PERSON,
-                    tooltip="Gerenciar Clientes",
-                    on_click=lambda _: self.navegar_para("clientes")
-                ),
-                ft.IconButton(
-                    icon=ft.icons.BOOK_ONLINE,
-                    tooltip="Fazer Reserva",
-                    on_click=lambda _: self.navegar_para("nova_reserva")
-                ),
-                ft.IconButton(
-                    icon=ft.icons.LIST,
-                    tooltip="Ver Reservas",
-                    on_click=lambda _: self.navegar_para("reservas")
-                ),
-            ]
+    # Instanciar o gerenciador de reservas
+    gerenciador = GerenciadorDeReservas()
+    
+    # Variáveis de estado
+    tela_atual = ft.Ref[str]()
+    tela_atual.current = "inicial"
+    
+    cliente_selecionado = ft.Ref[Cliente]()
+    
+    # Elementos da interface
+    lista_quartos = ft.ListView(expand=True, spacing=10, padding=20)
+    lista_clientes = ft.ListView(expand=True, spacing=10, padding=20)
+    lista_reservas = ft.ListView(expand=True, spacing=10, padding=20)
+    
+    # Campos de formulário
+    campo_nome = ft.TextField(label="Nome", width=300)
+    campo_telefone = ft.TextField(label="Telefone", width=300)
+    campo_email = ft.TextField(label="E-mail", width=300)
+    
+    dropdown_clientes = ft.Dropdown(label="Cliente", width=300)
+    dropdown_quartos = ft.Dropdown(label="Quarto", width=300)
+    
+    # Datas para os calendários
+    data_check_in = ft.Ref[datetime]()
+    data_check_in.current = datetime.now()
+    
+    data_check_out = ft.Ref[datetime]()
+    data_check_out.current = datetime.now() + timedelta(days=1)
+    
+    # Texto para exibir as datas selecionadas
+    texto_check_in = ft.Text(f"Check-in: {formatar_data(data_check_in.current)}")
+    texto_check_out = ft.Text(f"Check-out: {formatar_data(data_check_out.current)}")
+    
+    # Conteúdo principal
+    conteudo_principal = ft.Container(expand=True)
+    
+    # Funções auxiliares
+    def mostrar_snackbar(mensagem):
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(mensagem),
+            action="OK"
         )
-        
-        self.page.appbar = barra_navegacao
-        self.navegar_para("inicial")
+        page.snack_bar.open = True
+        page.update()
     
-    def navegar_para(self, tela: str):
-        self.tela_atual = tela
+    # Funções para atualizar listas
+    def atualizar_lista_quartos():
+        lista_quartos.controls.clear()
         
-        if tela == "inicial":
-            self.mostrar_tela_inicial()
-        elif tela == "clientes":
-            self.mostrar_tela_clientes()
-        elif tela == "novo_cliente":
-            self.mostrar_formulario_cliente()
-        elif tela == "nova_reserva":
-            self.mostrar_formulario_reserva()
-        elif tela == "reservas":
-            self.mostrar_tela_reservas()
-        
-        self.page.update()
-    
-    def mostrar_tela_inicial(self):
-        self.atualizar_lista_quartos()
-        
-        self.page.controls = [
-            ft.Column([
-                ft.Row([
-                    ft.Text("Quartos Disponíveis", size=24, weight=ft.FontWeight.BOLD)
-                ], alignment=ft.MainAxisAlignment.CENTER),
-                ft.Row([
-                    ft.ElevatedButton(
-                        text="Adicionar Novo Quarto",
-                        icon=ft.icons.ADD,
-                        on_click=self.mostrar_dialogo_novo_quarto
-                    )
-                ], alignment=ft.MainAxisAlignment.CENTER),
-                self.lista_quartos
-            ], alignment=ft.MainAxisAlignment.START, expand=True)
-        ]
-    
-    def atualizar_lista_quartos(self):
-        self.lista_quartos.controls = []
-        
-        for quarto in self.gerenciador.listar_quartos():
+        for quarto in gerenciador.listar_quartos():
             card_quarto = ft.Card(
                 content=ft.Container(
                     content=ft.Column([
@@ -515,175 +473,22 @@ class HotelApp:
                             ),
                         ),
                         ft.Row([
-                            ft.TextButton("Editar", on_click=lambda e, q=quarto: self.mostrar_dialogo_editar_quarto(e, q)),
-                            ft.TextButton("Excluir", on_click=lambda e, q=quarto: self.excluir_quarto(e, q))
+                            ft.TextButton("Editar", on_click=lambda e, q=quarto: mostrar_dialogo_editar_quarto(q)),
+                            ft.TextButton("Excluir", on_click=lambda e, q=quarto: excluir_quarto(q))
                         ], alignment=ft.MainAxisAlignment.END)
                     ]),
                     padding=10
                 )
             )
             
-            self.lista_quartos.controls.append(card_quarto)
+            lista_quartos.controls.append(card_quarto)
+        
+        page.update()
     
-    def mostrar_dialogo_novo_quarto(self, e):
-        # Campos do formulário
-        campo_numero = ft.TextField(label="Número do Quarto", keyboard_type=ft.KeyboardType.NUMBER)
-        dropdown_tipo = ft.Dropdown(
-            label="Tipo de Quarto",
-            options=[
-                ft.dropdown.Option("Single"),
-                ft.dropdown.Option("Double"),
-                ft.dropdown.Option("Suite")
-            ],
-            value="Single"
-        )
-        campo_preco = ft.TextField(label="Preço por Diária", keyboard_type=ft.KeyboardType.NUMBER)
+    def atualizar_lista_clientes():
+        lista_clientes.controls.clear()
         
-        def fechar_dialogo(e):
-            self.page.dialog.open = False
-            self.page.update()
-        
-        def salvar_quarto(e):
-            try:
-                numero = int(campo_numero.value)
-                tipo = dropdown_tipo.value
-                preco = float(campo_preco.value)
-                
-                # Verificar se já existe um quarto com este número
-                if self.gerenciador.obter_quarto_por_numero(numero):
-                    self.mostrar_snackbar("Já existe um quarto com este número!")
-                    return
-                
-                quarto = Quarto(numero, tipo, preco)
-                self.gerenciador.adicionar_quarto(quarto)
-                
-                self.mostrar_snackbar("Quarto adicionado com sucesso!")
-                self.atualizar_lista_quartos()
-                fechar_dialogo(e)
-            except ValueError:
-                self.mostrar_snackbar("Por favor, preencha todos os campos corretamente!")
-        
-        # Criar o diálogo
-        dialogo = ft.AlertDialog(
-            title=ft.Text("Adicionar Novo Quarto"),
-            content=ft.Column([
-                campo_numero,
-                dropdown_tipo,
-                campo_preco
-            ], tight=True, spacing=20, width=400),
-            actions=[
-                ft.TextButton("Cancelar", on_click=fechar_dialogo),
-                ft.TextButton("Salvar", on_click=salvar_quarto)
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
-        )
-        
-        self.page.dialog = dialogo
-        dialogo.open = True
-        self.page.update()
-    
-    def mostrar_dialogo_editar_quarto(self, e, quarto):
-        # Campos do formulário
-        campo_numero = ft.TextField(label="Número do Quarto", value=str(quarto.numero), disabled=True)
-        dropdown_tipo = ft.Dropdown(
-            label="Tipo de Quarto",
-            options=[
-                ft.dropdown.Option("Single"),
-                ft.dropdown.Option("Double"),
-                ft.dropdown.Option("Suite")
-            ],
-            value=quarto.tipo
-        )
-        campo_preco = ft.TextField(label="Preço por Diária", value=str(quarto.preco))
-        switch_disponivel = ft.Switch(label="Disponível", value=quarto.disponivel)
-        
-        def fechar_dialogo(e):
-            self.page.dialog.open = False
-            self.page.update()
-        
-        def salvar_quarto(e):
-            try:
-                tipo = dropdown_tipo.value
-                preco = float(campo_preco.value)
-                disponivel = switch_disponivel.value
-                
-                self.gerenciador.atualizar_quarto(quarto.numero, tipo, preco, disponivel)
-                
-                self.mostrar_snackbar("Quarto atualizado com sucesso!")
-                self.atualizar_lista_quartos()
-                fechar_dialogo(e)
-            except ValueError:
-                self.mostrar_snackbar("Por favor, preencha todos os campos corretamente!")
-        
-        # Criar o diálogo
-        dialogo = ft.AlertDialog(
-            title=ft.Text(f"Editar Quarto {quarto.numero}"),
-            content=ft.Column([
-                campo_numero,
-                dropdown_tipo,
-                campo_preco,
-                switch_disponivel
-            ], tight=True, spacing=20, width=400),
-            actions=[
-                ft.TextButton("Cancelar", on_click=fechar_dialogo),
-                ft.TextButton("Salvar", on_click=salvar_quarto)
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
-        )
-        
-        self.page.dialog = dialogo
-        dialogo.open = True
-        self.page.update()
-    
-    def excluir_quarto(self, e, quarto):
-        def confirmar_exclusao(e):
-            self.gerenciador.remover_quarto(quarto.numero)
-            self.mostrar_snackbar("Quarto excluído com sucesso!")
-            self.atualizar_lista_quartos()
-            fechar_dialogo(e)
-        
-        def fechar_dialogo(e):
-            self.page.dialog.open = False
-            self.page.update()
-        
-        # Criar o diálogo de confirmação
-        dialogo = ft.AlertDialog(
-            title=ft.Text("Confirmar Exclusão"),
-            content=ft.Text(f"Tem certeza que deseja excluir o Quarto {quarto.numero}?"),
-            actions=[
-                ft.TextButton("Cancelar", on_click=fechar_dialogo),
-                ft.TextButton("Excluir", on_click=confirmar_exclusao)
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
-        )
-        
-        self.page.dialog = dialogo
-        dialogo.open = True
-        self.page.update()
-    
-    def mostrar_tela_clientes(self):
-        self.atualizar_lista_clientes()
-        
-        self.page.controls = [
-            ft.Column([
-                ft.Row([
-                    ft.Text("Gerenciamento de Clientes", size=24, weight=ft.FontWeight.BOLD)
-                ], alignment=ft.MainAxisAlignment.CENTER),
-                ft.Row([
-                    ft.ElevatedButton(
-                        text="Adicionar Novo Cliente",
-                        icon=ft.icons.PERSON_ADD,
-                        on_click=lambda _: self.navegar_para("novo_cliente")
-                    )
-                ], alignment=ft.MainAxisAlignment.CENTER),
-                self.lista_clientes
-            ], alignment=ft.MainAxisAlignment.START, expand=True)
-        ]
-    
-    def atualizar_lista_clientes(self):
-        self.lista_clientes.controls = []
-        
-        for cliente in self.gerenciador.listar_clientes():
+        for cliente in gerenciador.listar_clientes():
             card_cliente = ft.Card(
                 content=ft.Container(
                     content=ft.Column([
@@ -696,238 +501,24 @@ class HotelApp:
                             ])
                         ),
                         ft.Row([
-                            ft.TextButton("Editar", on_click=lambda e, c=cliente: self.editar_cliente(e, c)),
-                            ft.TextButton("Excluir", on_click=lambda e, c=cliente: self.excluir_cliente(e, c))
+                            ft.TextButton("Editar", on_click=lambda e, c=cliente: editar_cliente(c)),
+                            ft.TextButton("Excluir", on_click=lambda e, c=cliente: excluir_cliente(c))
                         ], alignment=ft.MainAxisAlignment.END)
                     ]),
                     padding=10
                 )
             )
             
-            self.lista_clientes.controls.append(card_cliente)
+            lista_clientes.controls.append(card_cliente)
+        
+        page.update()
     
-    def mostrar_formulario_cliente(self):
-        # Limpar campos se não estiver editando
-        if not self.cliente_selecionado:
-            self.campo_nome.value = ""
-            self.campo_telefone.value = ""
-            self.campo_email.value = ""
+    def atualizar_lista_reservas():
+        lista_reservas.controls.clear()
         
-        botao_salvar = ft.ElevatedButton(
-            text="Salvar Cliente",
-            icon=ft.icons.SAVE,
-            on_click=self.salvar_cliente
-        )
-        
-        botao_cancelar = ft.OutlinedButton(
-            text="Cancelar",
-            on_click=lambda _: self.navegar_para("clientes")
-        )
-        
-        self.page.controls = [
-            ft.Column([
-                ft.Row([
-                    ft.Text(
-                        "Novo Cliente" if not self.cliente_selecionado else "Editar Cliente",
-                        size=24,
-                        weight=ft.FontWeight.BOLD
-                    )
-                ], alignment=ft.MainAxisAlignment.CENTER),
-                ft.Container(
-                    content=ft.Column([
-                        self.campo_nome,
-                        self.campo_telefone,
-                        self.campo_email,
-                        ft.Row([
-                            botao_cancelar,
-                            botao_salvar
-                        ], alignment=ft.MainAxisAlignment.END)
-                    ], spacing=20),
-                    padding=20,
-                    width=400
-                )
-            ], alignment=ft.MainAxisAlignment.CENTER, expand=True)
-        ]
-    
-    def salvar_cliente(self, e):
-        nome = self.campo_nome.value
-        telefone = self.campo_telefone.value
-        email = self.campo_email.value
-        
-        if not nome or not telefone or not email:
-            self.mostrar_snackbar("Por favor, preencha todos os campos!")
-            return
-        
-        if self.cliente_selecionado:
-            # Atualizar cliente existente
-            self.gerenciador.atualizar_cliente(
-                self.cliente_selecionado.id,
-                nome,
-                telefone,
-                email
-            )
-            self.mostrar_snackbar("Cliente atualizado com sucesso!")
-        else:
-            # Criar novo cliente
-            cliente = Cliente(nome, telefone, email)
-            self.gerenciador.adicionar_cliente(cliente)
-            self.mostrar_snackbar("Cliente adicionado com sucesso!")
-        
-        self.cliente_selecionado = None
-        self.navegar_para("clientes")
-    
-    def editar_cliente(self, e, cliente):
-        self.cliente_selecionado = cliente
-        self.campo_nome.value = cliente.nome
-        self.campo_telefone.value = cliente.telefone
-        self.campo_email.value = cliente.email
-        
-        self.navegar_para("novo_cliente")
-    
-    def excluir_cliente(self, e, cliente):
-        def confirmar_exclusao(e):
-            self.gerenciador.remover_cliente(cliente.id)
-            self.mostrar_snackbar("Cliente excluído com sucesso!")
-            self.atualizar_lista_clientes()
-            fechar_dialogo(e)
-        
-        def fechar_dialogo(e):
-            self.page.dialog.open = False
-            self.page.update()
-        
-        # Criar o diálogo de confirmação
-        dialogo = ft.AlertDialog(
-            title=ft.Text("Confirmar Exclusão"),
-            content=ft.Text(f"Tem certeza que deseja excluir o cliente {cliente.nome}?"),
-            actions=[
-                ft.TextButton("Cancelar", on_click=fechar_dialogo),
-                ft.TextButton("Excluir", on_click=confirmar_exclusao)
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
-        )
-        
-        self.page.dialog = dialogo
-        dialogo.open = True
-        self.page.update()
-    
-    def mostrar_formulario_reserva(self):
-        # Atualizar dropdowns
-        self.atualizar_dropdown_clientes()
-        self.atualizar_dropdown_quartos()
-        
-        # Limpar campos
-        self.campo_check_in.value = ""
-        self.campo_check_out.value = ""
-        
-        botao_salvar = ft.ElevatedButton(
-            text="Fazer Reserva",
-            icon=ft.icons.BOOK_ONLINE,
-            on_click=self.salvar_reserva
-        )
-        
-        botao_cancelar = ft.OutlinedButton(
-            text="Cancelar",
-            on_click=lambda _: self.navegar_para("reservas")
-        )
-        
-        self.page.controls = [
-            ft.Column([
-                ft.Row([
-                    ft.Text("Nova Reserva", size=24, weight=ft.FontWeight.BOLD)
-                ], alignment=ft.MainAxisAlignment.CENTER),
-                ft.Container(
-                    content=ft.Column([
-                        self.dropdown_clientes,
-                        self.dropdown_quartos,
-                        self.campo_check_in,
-                        self.campo_check_out,
-                        ft.Row([
-                            botao_cancelar,
-                            botao_salvar
-                        ], alignment=ft.MainAxisAlignment.END)
-                    ], spacing=20),
-                    padding=20,
-                    width=400
-                )
-            ], alignment=ft.MainAxisAlignment.CENTER, expand=True)
-        ]
-    
-    def atualizar_dropdown_clientes(self):
-        self.dropdown_clientes.options = []
-        
-        for cliente in self.gerenciador.listar_clientes():
-            self.dropdown_clientes.options.append(
-                ft.dropdown.Option(key=cliente.id, text=cliente.nome)
-            )
-        
-        if self.dropdown_clientes.options:
-            self.dropdown_clientes.value = self.dropdown_clientes.options[0].key
-    
-    def atualizar_dropdown_quartos(self):
-        self.dropdown_quartos.options = []
-        
-        for quarto in self.gerenciador.listar_quartos_disponiveis():
-            self.dropdown_quartos.options.append(
-                ft.dropdown.Option(
-                    key=str(quarto.numero),
-                    text=f"Quarto {quarto.numero} - {quarto.tipo} - R$ {quarto.preco:.2f}"
-                )
-            )
-        
-        if self.dropdown_quartos.options:
-            self.dropdown_quartos.value = self.dropdown_quartos.options[0].key
-    
-    def salvar_reserva(self, e):
-        cliente_id = self.dropdown_clientes.value
-        quarto_numero = int(self.dropdown_quartos.value) if self.dropdown_quartos.value else None
-        check_in = self.campo_check_in.value
-        check_out = self.campo_check_out.value
-        
-        if not cliente_id or not quarto_numero or not check_in or not check_out:
-            self.mostrar_snackbar("Por favor, preencha todos os campos!")
-            return
-        
-        # Validar formato das datas
-        try:
-            datetime.strptime(check_in, "%Y-%m-%d")
-            datetime.strptime(check_out, "%Y-%m-%d")
-        except ValueError:
-            self.mostrar_snackbar("Formato de data inválido! Use AAAA-MM-DD")
-            return
-        
-        reserva = self.gerenciador.criar_reserva(cliente_id, quarto_numero, check_in, check_out)
-        
-        if reserva:
-            self.mostrar_snackbar("Reserva criada com sucesso!")
-            self.navegar_para("reservas")
-        else:
-            self.mostrar_snackbar("Não foi possível criar a reserva. Verifique a disponibilidade do quarto nas datas selecionadas.")
-    
-    def mostrar_tela_reservas(self):
-        self.atualizar_lista_reservas()
-        
-        self.page.controls = [
-            ft.Column([
-                ft.Row([
-                    ft.Text("Gerenciamento de Reservas", size=24, weight=ft.FontWeight.BOLD)
-                ], alignment=ft.MainAxisAlignment.CENTER),
-                ft.Row([
-                    ft.ElevatedButton(
-                        text="Nova Reserva",
-                        icon=ft.icons.ADD,
-                        on_click=lambda _: self.navegar_para("nova_reserva")
-                    )
-                ], alignment=ft.MainAxisAlignment.CENTER),
-                self.lista_reservas
-            ], alignment=ft.MainAxisAlignment.START, expand=True)
-        ]
-    
-    def atualizar_lista_reservas(self):
-        self.lista_reservas.controls = []
-        
-        for reserva in self.gerenciador.listar_reservas():
-            cliente = self.gerenciador.obter_cliente_por_id(reserva.cliente_id)
-            quarto = self.gerenciador.obter_quarto_por_numero(reserva.quarto_numero)
+        for reserva in gerenciador.listar_reservas():
+            cliente = gerenciador.obter_cliente_por_id(reserva.cliente_id)
+            quarto = gerenciador.obter_quarto_por_numero(reserva.quarto_numero)
             
             if not cliente or not quarto:
                 continue
@@ -955,25 +546,364 @@ class HotelApp:
                             ])
                         ),
                         ft.Row([
-                            ft.TextButton("Editar", on_click=lambda e, r=reserva: self.editar_reserva(e, r)),
-                            ft.TextButton("Cancelar Reserva", on_click=lambda e, r=reserva: self.cancelar_reserva(e, r))
+                            ft.TextButton("Editar", on_click=lambda e, r=reserva: editar_reserva(r)),
+                            ft.TextButton("Cancelar Reserva", on_click=lambda e, r=reserva: cancelar_reserva(r))
                         ], alignment=ft.MainAxisAlignment.END)
                     ]),
                     padding=10
                 )
             )
             
-            self.lista_reservas.controls.append(card_reserva)
+            lista_reservas.controls.append(card_reserva)
+        
+        page.update()
     
-    def editar_reserva(self, e, reserva):
-        cliente = self.gerenciador.obter_cliente_por_id(reserva.cliente_id)
-        quarto = self.gerenciador.obter_quarto_por_numero(reserva.quarto_numero)
+    def atualizar_dropdown_clientes():
+        dropdown_clientes.options.clear()
+        
+        for cliente in gerenciador.listar_clientes():
+            dropdown_clientes.options.append(
+                ft.dropdown.Option(key=cliente.id, text=cliente.nome)
+            )
+        
+        if dropdown_clientes.options:
+            dropdown_clientes.value = dropdown_clientes.options[0].key
+        
+        page.update()
+    
+    def atualizar_dropdown_quartos():
+        dropdown_quartos.options.clear()
+        
+        for quarto in gerenciador.listar_quartos_disponiveis():
+            dropdown_quartos.options.append(
+                ft.dropdown.Option(
+                    key=str(quarto.numero),
+                    text=f"Quarto {quarto.numero} - {quarto.tipo} - R$ {quarto.preco:.2f}"
+                )
+            )
+        
+        if dropdown_quartos.options:
+            dropdown_quartos.value = dropdown_quartos.options[0].key
+        
+        page.update()
+    
+    # Funções para manipular quartos
+    def mostrar_dialogo_novo_quarto(e):
+        # Campos do formulário
+        campo_numero = ft.TextField(label="Número do Quarto", keyboard_type=ft.KeyboardType.NUMBER)
+        dropdown_tipo = ft.Dropdown(
+            label="Tipo de Quarto",
+            options=[
+                ft.dropdown.Option("Single"),
+                ft.dropdown.Option("Double"),
+                ft.dropdown.Option("Suite")
+            ],
+            value="Single"
+        )
+        campo_preco = ft.TextField(label="Preço por Diária", keyboard_type=ft.KeyboardType.NUMBER)
+        
+        def fechar_dialogo(e):
+            dialogo.open = False
+            page.update()
+        
+        def salvar_quarto(e):
+            try:
+                numero = int(campo_numero.value)
+                tipo = dropdown_tipo.value
+                preco = float(campo_preco.value)
+                
+                # Verificar se já existe um quarto com este número
+                if gerenciador.obter_quarto_por_numero(numero):
+                    mostrar_snackbar("Já existe um quarto com este número!")
+                    return
+                
+                quarto = Quarto(numero, tipo, preco)
+                gerenciador.adicionar_quarto(quarto)
+                
+                mostrar_snackbar("Quarto adicionado com sucesso!")
+                atualizar_lista_quartos()
+                fechar_dialogo(e)
+            except ValueError:
+                mostrar_snackbar("Por favor, preencha todos os campos corretamente!")
+        
+        # Criar o diálogo
+        dialogo = ft.AlertDialog(
+            title=ft.Text("Adicionar Novo Quarto"),
+            content=ft.Column([
+                campo_numero,
+                dropdown_tipo,
+                campo_preco
+            ], tight=True, spacing=20, width=400),
+            actions=[
+                ft.TextButton("Cancelar", on_click=fechar_dialogo),
+                ft.TextButton("Salvar", on_click=salvar_quarto)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        page.dialog = dialogo
+        dialogo.open = True
+        page.update()
+    
+    def mostrar_dialogo_editar_quarto(quarto):
+        # Campos do formulário
+        campo_numero = ft.TextField(label="Número do Quarto", value=str(quarto.numero), disabled=True)
+        dropdown_tipo = ft.Dropdown(
+            label="Tipo de Quarto",
+            options=[
+                ft.dropdown.Option("Single"),
+                ft.dropdown.Option("Double"),
+                ft.dropdown.Option("Suite")
+            ],
+            value=quarto.tipo
+        )
+        campo_preco = ft.TextField(label="Preço por Diária", value=str(quarto.preco))
+        switch_disponivel = ft.Switch(label="Disponível", value=quarto.disponivel)
+        
+        def fechar_dialogo(e):
+            dialogo.open = False
+            page.update()
+        
+        def salvar_quarto(e):
+            try:
+                tipo = dropdown_tipo.value
+                preco = float(campo_preco.value)
+                disponivel = switch_disponivel.value
+                
+                gerenciador.atualizar_quarto(quarto.numero, tipo, preco, disponivel)
+                
+                mostrar_snackbar("Quarto atualizado com sucesso!")
+                atualizar_lista_quartos()
+                fechar_dialogo(e)
+            except ValueError:
+                mostrar_snackbar("Por favor, preencha todos os campos corretamente!")
+        
+        # Criar o diálogo
+        dialogo = ft.AlertDialog(
+            title=ft.Text(f"Editar Quarto {quarto.numero}"),
+            content=ft.Column([
+                campo_numero,
+                dropdown_tipo,
+                campo_preco,
+                switch_disponivel
+            ], tight=True, spacing=20, width=400),
+            actions=[
+                ft.TextButton("Cancelar", on_click=fechar_dialogo),
+                ft.TextButton("Salvar", on_click=salvar_quarto)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        page.dialog = dialogo
+        dialogo.open = True
+        page.update()
+    
+    def excluir_quarto(quarto):
+        def confirmar_exclusao(e):
+            gerenciador.remover_quarto(quarto.numero)
+            mostrar_snackbar("Quarto excluído com sucesso!")
+            atualizar_lista_quartos()
+            fechar_dialogo(e)
+        
+        def fechar_dialogo(e):
+            dialogo.open = False
+            page.update()
+        
+        # Criar o diálogo de confirmação
+        dialogo = ft.AlertDialog(
+            title=ft.Text("Confirmar Exclusão"),
+            content=ft.Text(f"Tem certeza que deseja excluir o Quarto {quarto.numero}?"),
+            actions=[
+                ft.TextButton("Cancelar", on_click=fechar_dialogo),
+                ft.TextButton("Excluir", on_click=confirmar_exclusao)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        page.dialog = dialogo
+        dialogo.open = True
+        page.update()
+    
+    # Funções para manipular clientes
+    def salvar_cliente(e):
+        nome = campo_nome.value
+        telefone = campo_telefone.value
+        email = campo_email.value
+        
+        if not nome or not telefone or not email:
+            mostrar_snackbar("Por favor, preencha todos os campos!")
+            return
+        
+        if cliente_selecionado.current:
+            # Atualizar cliente existente
+            gerenciador.atualizar_cliente(
+                cliente_selecionado.current.id,
+                nome,
+                telefone,
+                email
+            )
+            mostrar_snackbar("Cliente atualizado com sucesso!")
+        else:
+            # Criar novo cliente
+            cliente = Cliente(nome, telefone, email)
+            gerenciador.adicionar_cliente(cliente)
+            mostrar_snackbar("Cliente adicionado com sucesso!")
+        
+        cliente_selecionado.current = None
+        navegar_para("clientes")
+    
+    def editar_cliente(cliente):
+        cliente_selecionado.current = cliente
+        campo_nome.value = cliente.nome
+        campo_telefone.value = cliente.telefone
+        campo_email.value = cliente.email
+        
+        navegar_para("novo_cliente")
+    
+    def excluir_cliente(cliente):
+        def confirmar_exclusao(e):
+            gerenciador.remover_cliente(cliente.id)
+            mostrar_snackbar("Cliente excluído com sucesso!")
+            atualizar_lista_clientes()
+            fechar_dialogo(e)
+        
+        def fechar_dialogo(e):
+            dialogo.open = False
+            page.update()
+        
+        # Criar o diálogo de confirmação
+        dialogo = ft.AlertDialog(
+            title=ft.Text("Confirmar Exclusão"),
+            content=ft.Text(f"Tem certeza que deseja excluir o cliente {cliente.nome}?"),
+            actions=[
+                ft.TextButton("Cancelar", on_click=fechar_dialogo),
+                ft.TextButton("Excluir", on_click=confirmar_exclusao)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        page.dialog = dialogo
+        dialogo.open = True
+        page.update()
+    
+    # Funções para manipular reservas
+    def selecionar_data_check_in(e):
+        def handle_date_picker_change(e):
+            data_check_in.current = e.control.value
+            texto_check_in.value = f"Check-in: {formatar_data(data_check_in.current)}"
+            page.update()
+        
+        # Abrir o DatePicker
+        page.open(
+            ft.DatePicker(
+                first_date=datetime.now(),
+                last_date=datetime(year=datetime.now().year + 5, month=12, day=31),
+                current_date=data_check_in.current,
+                on_change=handle_date_picker_change,
+            )
+        )
+    
+    def selecionar_data_check_out(e):
+        def handle_date_picker_change(e):
+            data_check_out.current = e.control.value
+            texto_check_out.value = f"Check-out: {formatar_data(data_check_out.current)}"
+            page.update()
+        
+        # Abrir o DatePicker
+        page.open(
+            ft.DatePicker(
+                first_date=datetime.now(),
+                last_date=datetime(year=datetime.now().year + 5, month=12, day=31),
+                current_date=data_check_out.current,
+                on_change=handle_date_picker_change,
+            )
+        )
+    
+    def salvar_reserva(e):
+        cliente_id = dropdown_clientes.value
+        quarto_numero = int(dropdown_quartos.value) if dropdown_quartos.value else None
+        
+        if not cliente_id or not quarto_numero or not data_check_in.current or not data_check_out.current:
+            mostrar_snackbar("Por favor, preencha todos os campos e selecione as datas!")
+            return
+        
+        # Converter datas para string no formato DD-MM-YYYY
+        check_in = formatar_data(data_check_in.current)
+        check_out = formatar_data(data_check_out.current)
+        
+        # Verificar se check-out é posterior a check-in
+        if data_check_out.current <= data_check_in.current:
+            mostrar_snackbar("A data de check-out deve ser posterior à data de check-in!")
+            return
+        
+        reserva = gerenciador.criar_reserva(cliente_id, quarto_numero, check_in, check_out)
+        
+        if reserva:
+            mostrar_snackbar("Reserva criada com sucesso!")
+            navegar_para("reservas")
+        else:
+            mostrar_snackbar("Não foi possível criar a reserva. Verifique a disponibilidade do quarto nas datas selecionadas.")
+    
+    def editar_reserva(reserva):
+        cliente = gerenciador.obter_cliente_por_id(reserva.cliente_id)
+        quarto = gerenciador.obter_quarto_por_numero(reserva.quarto_numero)
+        
+        # Tentar converter as datas da reserva para datetime
+        try:
+            data_check_in_atual = datetime.strptime(reserva.check_in, "%d-%m-%Y")
+            data_check_out_atual = datetime.strptime(reserva.check_out, "%d-%m-%Y")
+        except ValueError:
+            # Se houver erro no formato, usar datas atuais
+            data_check_in_atual = datetime.now()
+            data_check_out_atual = datetime.now() + timedelta(days=1)
+        
+        # Referências para as novas datas
+        nova_data_check_in = ft.Ref[datetime]()
+        nova_data_check_in.current = data_check_in_atual
+        
+        nova_data_check_out = ft.Ref[datetime]()
+        nova_data_check_out.current = data_check_out_atual
+        
+        # Textos para exibir as datas
+        texto_check_in_edit = ft.Text(f"Check-in: {formatar_data(data_check_in_atual)}")
+        texto_check_out_edit = ft.Text(f"Check-out: {formatar_data(data_check_out_atual)}")
         
         # Campos do formulário
         campo_cliente = ft.TextField(label="Cliente", value=cliente.nome, disabled=True)
         campo_quarto = ft.TextField(label="Quarto", value=f"{quarto.numero} - {quarto.tipo}", disabled=True)
-        campo_check_in = ft.TextField(label="Check-in (AAAA-MM-DD)", value=reserva.check_in)
-        campo_check_out = ft.TextField(label="Check-out (AAAA-MM-DD)", value=reserva.check_out)
+        
+        def selecionar_data_check_in_edit(e):
+            def handle_date_picker_change(e):
+                nova_data_check_in.current = e.control.value
+                texto_check_in_edit.value = f"Check-in: {formatar_data(nova_data_check_in.current)}"
+                page.update()
+            
+            # Abrir o DatePicker
+            page.open(
+                ft.DatePicker(
+                    first_date=datetime.now(),
+                    last_date=datetime(year=datetime.now().year + 5, month=12, day=31),
+                    current_date=nova_data_check_in.current,
+                    on_change=handle_date_picker_change,
+                )
+            )
+        
+        def selecionar_data_check_out_edit(e):
+            def handle_date_picker_change(e):
+                nova_data_check_out.current = e.control.value
+                texto_check_out_edit.value = f"Check-out: {formatar_data(nova_data_check_out.current)}"
+                page.update()
+            
+            # Abrir o DatePicker
+            page.open(
+                ft.DatePicker(
+                    first_date=datetime.now(),
+                    last_date=datetime(year=datetime.now().year + 5, month=12, day=31),
+                    current_date=nova_data_check_out.current,
+                    on_change=handle_date_picker_change,
+                )
+            )
+        
         dropdown_status = ft.Dropdown(
             label="Status",
             options=[
@@ -983,26 +913,24 @@ class HotelApp:
         )
         
         def fechar_dialogo(e):
-            self.page.dialog.open = False
-            self.page.update()
+            dialogo.open = False
+            page.update()
         
-        def salvar_reserva(e):
-            try:
-                check_in = campo_check_in.value
-                check_out = campo_check_out.value
-                status = dropdown_status.value
-                
-                # Validar formato das datas
-                datetime.strptime(check_in, "%Y-%m-%d")
-                datetime.strptime(check_out, "%Y-%m-%d")
-                
-                self.gerenciador.atualizar_reserva(reserva.id, check_in, check_out, status)
-                
-                self.mostrar_snackbar("Reserva atualizada com sucesso!")
-                self.atualizar_lista_reservas()
-                fechar_dialogo(e)
-            except ValueError:
-                self.mostrar_snackbar("Formato de data inválido! Use AAAA-MM-DD")
+        def salvar_reserva_edit(e):
+            check_in = formatar_data(nova_data_check_in.current)
+            check_out = formatar_data(nova_data_check_out.current)
+            status = dropdown_status.value
+            
+            # Verificar se check-out é posterior a check-in
+            if nova_data_check_out.current <= nova_data_check_in.current:
+                mostrar_snackbar("A data de check-out deve ser posterior à data de check-in!")
+                return
+            
+            gerenciador.atualizar_reserva(reserva.id, check_in, check_out, status)
+            
+            mostrar_snackbar("Reserva atualizada com sucesso!")
+            atualizar_lista_reservas()
+            fechar_dialogo(e)
         
         # Criar o diálogo
         dialogo = ft.AlertDialog(
@@ -1010,31 +938,49 @@ class HotelApp:
             content=ft.Column([
                 campo_cliente,
                 campo_quarto,
-                campo_check_in,
-                campo_check_out,
+                ft.Row([
+                    ft.Column([
+                        ft.Text("Check-in:"),
+                        texto_check_in_edit,
+                        ft.ElevatedButton(
+                            "Selecionar Data",
+                            icon=ft.icons.CALENDAR_TODAY,
+                            on_click=selecionar_data_check_in_edit
+                        )
+                    ]),
+                    ft.Column([
+                        ft.Text("Check-out:"),
+                        texto_check_out_edit,
+                        ft.ElevatedButton(
+                            "Selecionar Data",
+                            icon=ft.icons.CALENDAR_TODAY,
+                            on_click=selecionar_data_check_out_edit
+                        )
+                    ])
+                ]),
                 dropdown_status
             ], tight=True, spacing=20, width=400),
             actions=[
                 ft.TextButton("Cancelar", on_click=fechar_dialogo),
-                ft.TextButton("Salvar", on_click=salvar_reserva)
+                ft.TextButton("Salvar", on_click=salvar_reserva_edit)
             ],
             actions_alignment=ft.MainAxisAlignment.END
         )
         
-        self.page.dialog = dialogo
+        page.dialog = dialogo
         dialogo.open = True
-        self.page.update()
+        page.update()
     
-    def cancelar_reserva(self, e, reserva):
+    def cancelar_reserva(reserva):
         def confirmar_cancelamento(e):
-            self.gerenciador.cancelar_reserva(reserva.id)
-            self.mostrar_snackbar("Reserva cancelada com sucesso!")
-            self.atualizar_lista_reservas()
+            gerenciador.cancelar_reserva(reserva.id)
+            mostrar_snackbar("Reserva cancelada com sucesso!")
+            atualizar_lista_reservas()
             fechar_dialogo(e)
         
         def fechar_dialogo(e):
-            self.page.dialog.open = False
-            self.page.update()
+            dialogo.open = False
+            page.update()
         
         # Criar o diálogo de confirmação
         dialogo = ft.AlertDialog(
@@ -1047,19 +993,225 @@ class HotelApp:
             actions_alignment=ft.MainAxisAlignment.END
         )
         
-        self.page.dialog = dialogo
+        page.dialog = dialogo
         dialogo.open = True
-        self.page.update()
+        page.update()
     
-    def mostrar_snackbar(self, mensagem):
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Text(mensagem),
-            action="OK"
+    # Funções de navegação
+    def navegar_para(tela):
+        tela_atual.current = tela
+        
+        if tela == "inicial":
+            mostrar_tela_inicial()
+        elif tela == "clientes":
+            mostrar_tela_clientes()
+        elif tela == "novo_cliente":
+            mostrar_formulario_cliente()
+        elif tela == "nova_reserva":
+            mostrar_formulario_reserva()
+        elif tela == "reservas":
+            mostrar_tela_reservas()
+    
+    # Funções para mostrar telas
+    def mostrar_tela_inicial():
+        atualizar_lista_quartos()
+        
+        conteudo_principal.content = ft.Column([
+            ft.Row([
+                ft.Text("Quartos Disponíveis", size=24, weight=ft.FontWeight.BOLD)
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([
+                ft.ElevatedButton(
+                    text="Adicionar Novo Quarto",
+                    icon=ft.icons.ADD,
+                    on_click=mostrar_dialogo_novo_quarto
+                )
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            lista_quartos
+        ], alignment=ft.MainAxisAlignment.START, expand=True)
+        
+        page.update()
+    
+    def mostrar_tela_clientes():
+        atualizar_lista_clientes()
+        
+        conteudo_principal.content = ft.Column([
+            ft.Row([
+                ft.Text("Gerenciamento de Clientes", size=24, weight=ft.FontWeight.BOLD)
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([
+                ft.ElevatedButton(
+                    text="Adicionar Novo Cliente",
+                    icon=ft.icons.PERSON_ADD,
+                    on_click=lambda e: navegar_para("novo_cliente")
+                )
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            lista_clientes
+        ], alignment=ft.MainAxisAlignment.START, expand=True)
+        
+        page.update()
+    
+    def mostrar_formulario_cliente():
+        # Limpar campos se não estiver editando
+        if not cliente_selecionado.current:
+            campo_nome.value = ""
+            campo_telefone.value = ""
+            campo_email.value = ""
+        
+        botao_salvar = ft.ElevatedButton(
+            text="Salvar Cliente",
+            icon=ft.icons.SAVE,
+            on_click=salvar_cliente
         )
-        self.page.snack_bar.open = True
-        self.page.update()
+        
+        botao_cancelar = ft.OutlinedButton(
+            text="Cancelar",
+            on_click=lambda e: navegar_para("clientes")
+        )
+        
+        conteudo_principal.content = ft.Column([
+            ft.Row([
+                ft.Text(
+                    "Novo Cliente" if not cliente_selecionado.current else "Editar Cliente",
+                    size=24,
+                    weight=ft.FontWeight.BOLD
+                )
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Container(
+                content=ft.Column([
+                    campo_nome,
+                    campo_telefone,
+                    campo_email,
+                    ft.Row([
+                        botao_cancelar,
+                        botao_salvar
+                    ], alignment=ft.MainAxisAlignment.END)
+                ], spacing=20),
+                padding=20,
+                width=400
+            )
+        ], alignment=ft.MainAxisAlignment.CENTER, expand=True)
+        
+        page.update()
+    
+    def mostrar_formulario_reserva():
+        # Atualizar dropdowns
+        atualizar_dropdown_clientes()
+        atualizar_dropdown_quartos()
+        
+        # Inicializar datas
+        data_check_in.current = datetime.now()
+        data_check_out.current = datetime.now() + timedelta(days=1)
+        
+        # Atualizar textos
+        texto_check_in.value = f"Check-in: {formatar_data(data_check_in.current)}"
+        texto_check_out.value = f"Check-out: {formatar_data(data_check_out.current)}"
+        
+        botao_salvar = ft.ElevatedButton(
+            text="Fazer Reserva",
+            icon=ft.icons.BOOK_ONLINE,
+            on_click=salvar_reserva
+        )
+        
+        botao_cancelar = ft.OutlinedButton(
+            text="Cancelar",
+            on_click=lambda e: navegar_para("reservas")
+        )
+        
+        conteudo_principal.content = ft.Column([
+            ft.Row([
+                ft.Text("Nova Reserva", size=24, weight=ft.FontWeight.BOLD)
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Container(
+                content=ft.Column([
+                    dropdown_clientes,
+                    dropdown_quartos,
+                    ft.Row([
+                        ft.Column([
+                            ft.Text("Check-in:"),
+                            texto_check_in,
+                            ft.ElevatedButton(
+                                "Selecionar Data",
+                                icon=ft.icons.CALENDAR_TODAY,
+                                on_click=selecionar_data_check_in
+                            )
+                        ]),
+                        ft.Column([
+                            ft.Text("Check-out:"),
+                            texto_check_out,
+                            ft.ElevatedButton(
+                                "Selecionar Data",
+                                icon=ft.icons.CALENDAR_TODAY,
+                                on_click=selecionar_data_check_out
+                            )
+                        ])
+                    ]),
+                    ft.Row([
+                        botao_cancelar,
+                        botao_salvar
+                    ], alignment=ft.MainAxisAlignment.END)
+                ], spacing=20),
+                padding=20,
+                width=500
+            )
+        ], alignment=ft.MainAxisAlignment.CENTER, expand=True)
+        
+        page.update()
+    
+    def mostrar_tela_reservas():
+        atualizar_lista_reservas()
+        
+        conteudo_principal.content = ft.Column([
+            ft.Row([
+                ft.Text("Gerenciamento de Reservas", size=24, weight=ft.FontWeight.BOLD)
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([
+                ft.ElevatedButton(
+                    text="Nova Reserva",
+                    icon=ft.icons.ADD,
+                    on_click=lambda e: navegar_para("nova_reserva")
+                )
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            lista_reservas
+        ], alignment=ft.MainAxisAlignment.START, expand=True)
+        
+        page.update()
+    
+    # Barra de navegação
+    barra_navegacao = ft.AppBar(
+        title=ft.Text("Refúgio dos Sonhos"),
+        center_title=True,
+        bgcolor=ft.colors.BLUE_700,
+        actions=[
+            ft.IconButton(
+                icon=ft.icons.HOME,
+                tooltip="Tela Inicial",
+                on_click=lambda e: navegar_para("inicial")
+            ),
+            ft.IconButton(
+                icon=ft.icons.PERSON,
+                tooltip="Gerenciar Clientes",
+                on_click=lambda e: navegar_para("clientes")
+            ),
+            ft.IconButton(
+                icon=ft.icons.BOOK_ONLINE,
+                tooltip="Fazer Reserva",
+                on_click=lambda e: navegar_para("nova_reserva")
+            ),
+            ft.IconButton(
+                icon=ft.icons.LIST,
+                tooltip="Ver Reservas",
+                on_click=lambda e: navegar_para("reservas")
+            ),
+        ]
+    )
+    
+    # Configurar a página
+    page.appbar = barra_navegacao
+    page.add(conteudo_principal)
+    
+    # Iniciar com a tela inicial
+    navegar_para("inicial")
 
-def main(page: ft.Page):
-    app = HotelApp(page)
 
 ft.app(target=main)
