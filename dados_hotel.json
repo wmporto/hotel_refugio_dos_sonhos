@@ -1,0 +1,66 @@
+{
+    "clientes": [
+        {
+            "nome": "Pedro jos\u00e9",
+            "telefone": "9837745",
+            "email": "dwkiru@gil.com",
+            "id": "be7219e8-4f09-455d-b8c7-320c453faa52"
+        },
+        {
+            "nome": "Abreu Duarte",
+            "telefone": "94759",
+            "email": "sfwi@gooe.com",
+            "id": "b39fb646-fb6f-4610-99d0-02934122918d"
+        }
+    ],
+    "quartos": [
+        {
+            "numero": 101,
+            "tipo": "Single",
+            "preco": 150.0,
+            "disponivel": false
+        },
+        {
+            "numero": 102,
+            "tipo": "Single",
+            "preco": 150.0,
+            "disponivel": false
+        },
+        {
+            "numero": 201,
+            "tipo": "Double",
+            "preco": 250.0,
+            "disponivel": true
+        },
+        {
+            "numero": 202,
+            "tipo": "Double",
+            "preco": 250.0,
+            "disponivel": true
+        },
+        {
+            "numero": 301,
+            "tipo": "Suite",
+            "preco": 400.0,
+            "disponivel": true
+        }
+    ],
+    "reservas": [
+        {
+            "cliente_id": "be7219e8-4f09-455d-b8c7-320c453faa52",
+            "quarto_numero": 101,
+            "check_in": "11-04-2025",
+            "check_out": "17-04-2025",
+            "status": "Pendente",
+            "id": "e1ed5e60-d2b0-456c-aafb-c4ec166bd6da"
+        },
+        {
+            "cliente_id": "b39fb646-fb6f-4610-99d0-02934122918d",
+            "quarto_numero": 102,
+            "check_in": "24-04-2025",
+            "check_out": "30-04-2025",
+            "status": "Pendente",
+            "id": "8c0dbaab-a95f-421f-9295-6df014a5d988"
+        }
+    ]
+}
