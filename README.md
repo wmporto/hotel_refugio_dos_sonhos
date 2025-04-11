@@ -1,3 +1,1 @@
-Vou implementar um mapa de reservas gráfico que permite visualizar e gerenciar as reservas diretamente no calendário, similar ao mostrado na imagem. Esta será uma nova tela no sistema que mostrará os quartos como linhas e os dias como colunas, com blocos coloridos representando as reservas.
-
-
+Vou implementar o mapa gráfico dos quartos conforme solicitado, permitindo visualizar claramente o status de cada quarto (disponível, ocupado ou pendente de limpeza). Vou adicionar esta funcionalidade como uma nova tela no sistema.
