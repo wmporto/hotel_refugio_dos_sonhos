@@ -1,9 +1,10 @@
 import flet as ft
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import os
-from typing import List, Dict, Optional, Any
+import calendar
+from typing import List, Dict, Optional, Any, Tuple
 
 # Classes do modelo de dados
 class Cliente:
@@ -61,12 +62,14 @@ class Cliente:
 
 class Quarto:
     TIPOS = ["Single", "Double", "Suite"]
+    STATUS = ["Disponível", "Ocupado", "Limpeza Pendente"]
     
-    def __init__(self, numero: int, tipo: str, preco: float, disponivel: bool = True):
+    def __init__(self, numero: int, tipo: str, preco: float, disponivel: bool = True, status: str = "Disponível"):
         self._numero = numero
         self._tipo = tipo if tipo in self.TIPOS else "Single"
         self._preco = preco
         self._disponivel = disponivel
+        self._status = status if status in self.STATUS else "Disponível"
     
     @property
     def numero(self) -> int:
@@ -98,12 +101,24 @@ class Quarto:
     def disponivel(self, valor: bool) -> None:
         self._disponivel = valor
     
+    @property
+    def status(self) -> str:
+        return self._status
+    
+    @status.setter
+    def status(self, valor: str) -> None:
+        if valor in self.STATUS:
+            self._status = valor
+            # Atualizar disponibilidade com base no status
+            self._disponivel = (valor == "Disponível")
+    
     def to_dict(self) -> Dict[str, Any]:
         return {
             "numero": self._numero,
             "tipo": self._tipo,
             "preco": self._preco,
-            "disponivel": self._disponivel
+            "disponivel": self._disponivel,
+            "status": self._status
         }
     
     @classmethod
@@ -112,7 +127,8 @@ class Quarto:
             numero=data["numero"],
             tipo=data["tipo"],
             preco=data["preco"],
-            disponivel=data["disponivel"]
+            disponivel=data["disponivel"],
+            status=data.get("status", "Disponível" if data["disponivel"] else "Ocupado")
         )
 
 
@@ -236,12 +252,22 @@ class GerenciadorDeReservas:
                 return quarto
         return None
     
-    def atualizar_quarto(self, numero: int, tipo: str, preco: float, disponivel: bool) -> bool:
+    def atualizar_quarto(self, numero: int, tipo: str, preco: float, disponivel: bool, status: str = None) -> bool:
         quarto = self.obter_quarto_por_numero(numero)
         if quarto:
             quarto.tipo = tipo
             quarto.preco = preco
             quarto.disponivel = disponivel
+            if status:
+                quarto.status = status
+            self._salvar_dados()
+            return True
+        return False
+    
+    def atualizar_status_quarto(self, numero: int, status: str) -> bool:
+        quarto = self.obter_quarto_por_numero(numero)
+        if quarto:
+            quarto.status = status
             self._salvar_dados()
             return True
         return False
@@ -271,8 +297,10 @@ class GerenciadorDeReservas:
         reserva = Reserva(cliente_id, quarto_numero, check_in, check_out)
         self._reservas.append(reserva)
         
-        # Não marcamos o quarto como indisponível permanentemente
-        # Apenas verificamos a disponibilidade para o período específico
+        # Atualizar o status do quarto se a reserva começar hoje
+        hoje = formatar_data(datetime.now())
+        if check_in == hoje:
+            quarto.status = "Ocupado"
         
         self._salvar_dados()
         return reserva
@@ -287,6 +315,11 @@ class GerenciadorDeReservas:
         
         # Verificar se check_out é posterior a check_in
         if data_check_out <= data_check_in:
+            return False
+        
+        # Verificar se o quarto está com status disponível
+        quarto = self.obter_quarto_por_numero(quarto_numero)
+        if quarto and quarto.status != "Disponível":
             return False
         
         # Verificar se há sobreposição com outras reservas ativas (não canceladas)
@@ -318,6 +351,13 @@ class GerenciadorDeReservas:
             reserva.check_in = check_in
             reserva.check_out = check_out
             reserva.status = status
+            
+            # Se a reserva for concluída, marcar o quarto como "Limpeza Pendente"
+            if status == "Concluída":
+                quarto = self.obter_quarto_por_numero(reserva.quarto_numero)
+                if quarto:
+                    quarto.status = "Limpeza Pendente"
+            
             self._salvar_dados()
             return True
         return False
@@ -326,6 +366,14 @@ class GerenciadorDeReservas:
         reserva = self.obter_reserva_por_id(reserva_id)
         if reserva:
             reserva.status = "Cancelada"
+            
+            # Verificar se o quarto estava ocupado por esta reserva
+            hoje = formatar_data(datetime.now())
+            if reserva.check_in <= hoje and hoje < reserva.check_out:
+                quarto = self.obter_quarto_por_numero(reserva.quarto_numero)
+                if quarto:
+                    quarto.status = "Limpeza Pendente"
+            
             self._salvar_dados()
             return True
         return False
@@ -339,12 +387,12 @@ class GerenciadorDeReservas:
     def listar_quartos_disponiveis(self, check_in: str = None, check_out: str = None) -> List[Quarto]:
         # Se não foram fornecidas datas, retornar todos os quartos marcados como disponíveis
         if not check_in or not check_out:
-            return [q for q in self._quartos if q.disponivel]
+            return [q for q in self._quartos if q.status == "Disponível"]
         
         # Se foram fornecidas datas, verificar disponibilidade para o período
         quartos_disponiveis = []
         for quarto in self._quartos:
-            if self._verificar_disponibilidade(quarto.numero, check_in, check_out):
+            if quarto.status == "Disponível" and self._verificar_disponibilidade(quarto.numero, check_in, check_out):
                 quartos_disponiveis.append(quarto)
         
         return quartos_disponiveis
@@ -357,6 +405,19 @@ class GerenciadorDeReservas:
     
     def listar_reservas_por_quarto(self, quarto_numero: int) -> List[Reserva]:
         return [r for r in self._reservas if r.quarto_numero == quarto_numero]
+    
+    def obter_reserva_atual_quarto(self, quarto_numero: int) -> Optional[Reserva]:
+        """Retorna a reserva atual para um quarto, se houver"""
+        hoje = formatar_data(datetime.now())
+        
+        for reserva in self._reservas:
+            if (reserva.quarto_numero == quarto_numero and 
+                reserva.status != "Cancelada" and 
+                reserva.check_in <= hoje and 
+                hoje < reserva.check_out):
+                return reserva
+        
+        return None
     
     def _salvar_dados(self) -> None:
         dados = {
@@ -381,9 +442,30 @@ class GerenciadorDeReservas:
                 self._clientes = [Cliente.from_dict(c) for c in dados.get("clientes", [])]
                 self._quartos = [Quarto.from_dict(q) for q in dados.get("quartos", [])]
                 self._reservas = [Reserva.from_dict(r) for r in dados.get("reservas", [])]
+                
+                # Atualizar status dos quartos com base nas reservas atuais
+                self._atualizar_status_quartos()
         except Exception as e:
             print(f"Erro ao carregar dados: {e}")
             self._criar_dados_iniciais()
+    
+    def _atualizar_status_quartos(self) -> None:
+        """Atualiza o status dos quartos com base nas reservas atuais"""
+        hoje = formatar_data(datetime.now())
+        
+        # Primeiro, resetar todos os quartos para disponível
+        for quarto in self._quartos:
+            if quarto.status != "Limpeza Pendente":
+                quarto.status = "Disponível"
+        
+        # Depois, marcar os quartos com reservas ativas como ocupados
+        for reserva in self._reservas:
+            if (reserva.status != "Cancelada" and 
+                reserva.check_in <= hoje and 
+                hoje < reserva.check_out):
+                quarto = self.obter_quarto_por_numero(reserva.quarto_numero)
+                if quarto:
+                    quarto.status = "Ocupado"
     
     def _criar_dados_iniciais(self) -> None:
         # Criar alguns quartos iniciais
@@ -409,8 +491,8 @@ def formatar_data(data: datetime) -> str:
 def main(page: ft.Page):
     # Configurações da página
     page.title = "Refúgio dos Sonhos - Sistema de Gerenciamento"
-    page.theme_mode = ft.ThemeMode.DARK
-    page.window_width = 1000
+    page.theme_mode = ft.ThemeMode.LIGHT
+    page.window_width = 1200
     page.window_height = 800
     page.padding = 20
     
@@ -422,6 +504,10 @@ def main(page: ft.Page):
     tela_atual.current = "inicial"
     
     cliente_selecionado = ft.Ref[Cliente]()
+    
+    # Data atual para o calendário
+    data_calendario = ft.Ref[datetime]()
+    data_calendario.current = datetime.now()
     
     # Elementos da interface
     lista_quartos = ft.ListView(expand=True, spacing=10, padding=20)
@@ -479,8 +565,8 @@ def main(page: ft.Page):
                             title=ft.Text(f"Quarto {quarto.numero} - {quarto.tipo}"),
                             subtitle=ft.Text(f"Preço: R$ {quarto.preco:.2f} / diária"),
                             trailing=ft.Chip(
-                                label=ft.Text("Disponível" if disponivel else "Ocupado"),
-                                bgcolor=ft.Colors.GREEN if disponivel else ft.Colors.RED,
+                                label=ft.Text(quarto.status),
+                                bgcolor=obter_cor_status(quarto.status),
                             ),
                         ),
                         ft.Row([
@@ -607,6 +693,24 @@ def main(page: ft.Page):
         
         page.update()
     
+    def obter_cor_status(status: str) -> str:
+        """Retorna a cor correspondente ao status do quarto"""
+        cores = {
+            "Disponível": ft.Colors.GREEN,
+            "Ocupado": ft.Colors.RED,
+            "Limpeza Pendente": ft.Colors.ORANGE
+        }
+        return cores.get(status, ft.Colors.GREY)
+    
+    def obter_icone_status(status: str) -> str:
+        """Retorna o ícone correspondente ao status do quarto"""
+        icones = {
+            "Disponível": ft.Icons.CHECK_CIRCLE,
+            "Ocupado": ft.Icons.NO_ACCOUNTS,
+            "Limpeza Pendente": ft.Icons.CLEANING_SERVICES
+        }
+        return icones.get(status, ft.Icons.QUESTION_MARK)
+    
     # Funções para manipular quartos
     def mostrar_dialogo_novo_quarto(e):
         # Campos do formulário
@@ -621,6 +725,15 @@ def main(page: ft.Page):
             value="Single"
         )
         campo_preco = ft.TextField(label="Preço por Diária", keyboard_type=ft.KeyboardType.NUMBER)
+        dropdown_status = ft.Dropdown(
+            label="Status",
+            options=[
+                ft.dropdown.Option("Disponível"),
+                ft.dropdown.Option("Ocupado"),
+                ft.dropdown.Option("Limpeza Pendente")
+            ],
+            value="Disponível"
+        )
         
         def fechar_dialogo(e):
             dialogo.open = False
@@ -631,13 +744,14 @@ def main(page: ft.Page):
                 numero = int(campo_numero.value)
                 tipo = dropdown_tipo.value
                 preco = float(campo_preco.value)
+                status = dropdown_status.value
                 
                 # Verificar se já existe um quarto com este número
                 if gerenciador.obter_quarto_por_numero(numero):
                     mostrar_snackbar("Já existe um quarto com este número!")
                     return
                 
-                quarto = Quarto(numero, tipo, preco)
+                quarto = Quarto(numero, tipo, preco, status == "Disponível", status)
                 gerenciador.adicionar_quarto(quarto)
                 
                 mostrar_snackbar("Quarto adicionado com sucesso!")
@@ -652,7 +766,8 @@ def main(page: ft.Page):
             content=ft.Column([
                 campo_numero,
                 dropdown_tipo,
-                campo_preco
+                campo_preco,
+                dropdown_status
             ], tight=True, spacing=20, width=400),
             actions=[
                 ft.TextButton("Cancelar", on_click=fechar_dialogo),
@@ -678,7 +793,15 @@ def main(page: ft.Page):
             value=quarto.tipo
         )
         campo_preco = ft.TextField(label="Preço por Diária", value=str(quarto.preco))
-        switch_disponivel = ft.Switch(label="Disponível", value=quarto.disponivel)
+        dropdown_status = ft.Dropdown(
+            label="Status",
+            options=[
+                ft.dropdown.Option("Disponível"),
+                ft.dropdown.Option("Ocupado"),
+                ft.dropdown.Option("Limpeza Pendente")
+            ],
+            value=quarto.status
+        )
         
         def fechar_dialogo(e):
             dialogo.open = False
@@ -688,12 +811,17 @@ def main(page: ft.Page):
             try:
                 tipo = dropdown_tipo.value
                 preco = float(campo_preco.value)
-                disponivel = switch_disponivel.value
+                status = dropdown_status.value
                 
-                gerenciador.atualizar_quarto(quarto.numero, tipo, preco, disponivel)
+                gerenciador.atualizar_quarto(quarto.numero, tipo, preco, status == "Disponível", status)
                 
                 mostrar_snackbar("Quarto atualizado com sucesso!")
                 atualizar_lista_quartos()
+                
+                # Se estiver na tela de mapa de quartos, atualizar o mapa
+                if tela_atual.current == "mapa_quartos":
+                    atualizar_mapa_quartos()
+                
                 fechar_dialogo(e)
             except ValueError:
                 mostrar_snackbar("Por favor, preencha todos os campos corretamente!")
@@ -705,7 +833,7 @@ def main(page: ft.Page):
                 campo_numero,
                 dropdown_tipo,
                 campo_preco,
-                switch_disponivel
+                dropdown_status
             ], tight=True, spacing=20, width=400),
             actions=[
                 ft.TextButton("Cancelar", on_click=fechar_dialogo),
@@ -773,7 +901,7 @@ def main(page: ft.Page):
         navegar_para("clientes")
     
     def editar_cliente(cliente):
-        cliente_selecionado.current =  cliente
+        cliente_selecionado.current = cliente
         campo_nome.value = cliente.nome
         campo_telefone.value = cliente.telefone
         campo_email.value = cliente.email
@@ -954,6 +1082,11 @@ def main(page: ft.Page):
             
             mostrar_snackbar("Reserva atualizada com sucesso!")
             atualizar_lista_reservas()
+            
+            # Se estiver na tela de mapa de quartos, atualizar o mapa
+            if tela_atual.current == "mapa_quartos":
+                atualizar_mapa_quartos()
+                
             fechar_dialogo(e)
         
         # Criar o diálogo
@@ -1000,6 +1133,11 @@ def main(page: ft.Page):
             if gerenciador.cancelar_reserva(reserva.id):
                 mostrar_snackbar("Reserva cancelada com sucesso!")
                 atualizar_lista_reservas()
+                
+                # Se estiver na tela de mapa de quartos, atualizar o mapa
+                if tela_atual.current == "mapa_quartos":
+                    atualizar_mapa_quartos()
+                
                 fechar_dialogo(e)
             else:
                 mostrar_snackbar("Erro ao cancelar a reserva!")
@@ -1023,9 +1161,250 @@ def main(page: ft.Page):
         dialogo.open = True
         page.update()
     
+    # Funções para o mapa de quartos
+    def criar_card_quarto(quarto: Quarto) -> ft.Card:
+        """Cria um card para representar um quarto no mapa"""
+        # Obter a reserva atual para este quarto, se houver
+        reserva_atual = gerenciador.obter_reserva_atual_quarto(quarto.numero)
+        
+        # Determinar o conteúdo do card com base no status do quarto
+        conteudo_card = []
+        
+        # Cabeçalho do card
+        conteudo_card.append(
+            ft.ListTile(
+                leading=ft.Icon(obter_icone_status(quarto.status), color=obter_cor_status(quarto.status)),
+                title=ft.Text(f"Quarto {quarto.numero}", weight=ft.FontWeight.BOLD),
+                subtitle=ft.Text(quarto.tipo),
+                trailing=ft.Chip(
+                    label=ft.Text(quarto.status),
+                    bgcolor=obter_cor_status(quarto.status)
+                )
+            )
+        )
+        
+        # Informações adicionais
+        conteudo_card.append(ft.Text(f"Preço: R$ {quarto.preco:.2f} / diária"))
+        
+        # Se o quarto estiver ocupado, mostrar informações da reserva
+        if quarto.status == "Ocupado" and reserva_atual:
+            cliente = gerenciador.obter_cliente_por_id(reserva_atual.cliente_id)
+            if cliente:
+                conteudo_card.append(ft.Divider())
+                conteudo_card.append(ft.Text(f"Hóspede: {cliente.nome}", size=12))
+                conteudo_card.append(ft.Text(f"Check-in: {reserva_atual.check_in}", size=12))
+                conteudo_card.append(ft.Text(f"Check-out: {reserva_atual.check_out}", size=12))
+        
+        # Botões de ação
+        botoes = []
+        
+        # Botão para editar quarto
+        botoes.append(
+            ft.IconButton(
+                icon=ft.Icons.EDIT,
+                tooltip="Editar Quarto",
+                on_click=lambda e, q=quarto: mostrar_dialogo_editar_quarto(q)
+            )
+        )
+        
+        # Botões específicos para cada status
+        if quarto.status == "Disponível":
+            # Botão para fazer reserva
+            botoes.append(
+                ft.IconButton(
+                    icon=ft.Icons.ADD,
+                    tooltip="Fazer Reserva",
+                    on_click=lambda e, q=quarto: navegar_para_nova_reserva_com_quarto(q)
+                )
+            )
+        elif quarto.status == "Ocupado" and reserva_atual:
+            # Botão para ver/editar reserva
+            botoes.append(
+                ft.IconButton(
+                    icon=ft.Icons.VISIBILITY,
+                    tooltip="Ver Reserva",
+                    on_click=lambda e, r=reserva_atual: editar_reserva(r)
+                )
+            )
+            # Botão para concluir reserva
+            botoes.append(
+                ft.IconButton(
+                    icon=ft.Icons.CHECK,
+                    tooltip="Concluir Reserva",
+                    on_click=lambda e, r=reserva_atual: concluir_reserva(r)
+                )
+            )
+        elif quarto.status == "Limpeza Pendente":
+            # Botão para marcar como limpo/disponível
+            botoes.append(
+                ft.IconButton(
+                    icon=ft.Icons.CLEANING_SERVICES,
+                    tooltip="Marcar como Limpo",
+                    on_click=lambda e, q=quarto: marcar_quarto_como_disponivel(q)
+                )
+            )
+        
+        conteudo_card.append(
+            ft.Row(botoes, alignment=ft.MainAxisAlignment.END)
+        )
+        
+        # Criar o card
+        card = ft.Card(
+            content=ft.Container(
+                content=ft.Column(conteudo_card, spacing=5),
+                padding=10,
+                width=250,
+                height=200
+            ),
+            elevation=5
+        )
+        
+        return card
+    
+    def navegar_para_nova_reserva_com_quarto(quarto: Quarto):
+        """Navega para a tela de nova reserva com um quarto pré-selecionado"""
+        # Atualizar dropdown de quartos para mostrar apenas o quarto selecionado
+        dropdown_quartos.options = [
+            ft.dropdown.Option(
+                key=str(quarto.numero),
+                text=f"Quarto {quarto.numero} - {quarto.tipo} - R$ {quarto.preco:.2f}"
+            )
+        ]
+        dropdown_quartos.value = str(quarto.numero)
+        
+        # Navegar para a tela de nova reserva
+        navegar_para("nova_reserva")
+    
+    def concluir_reserva(reserva: Reserva):
+        """Marca uma reserva como concluída e o quarto como pendente de limpeza"""
+        def confirmar_conclusao(e):
+            gerenciador.atualizar_reserva(reserva.id, reserva.check_in, reserva.check_out, "Concluída")
+            mostrar_snackbar("Reserva concluída com sucesso! Quarto marcado para limpeza.")
+            atualizar_mapa_quartos()
+            fechar_dialogo(e)
+        
+        def fechar_dialogo(e):
+            dialogo.open = False
+            page.update()
+        
+        # Criar o diálogo de confirmação
+        dialogo = ft.AlertDialog(
+            title=ft.Text("Confirmar Conclusão"),
+            content=ft.Text("Tem certeza que deseja concluir esta reserva? O quarto será marcado como pendente de limpeza."),
+            actions=[
+                ft.TextButton("Não", on_click=fechar_dialogo),
+                ft.TextButton("Sim, Concluir", on_click=confirmar_conclusao)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        page.dialog = dialogo
+        dialogo.open = True
+        page.update()
+    
+    def marcar_quarto_como_disponivel(quarto: Quarto):
+        """Marca um quarto como disponível após a limpeza"""
+        gerenciador.atualizar_status_quarto(quarto.numero, "Disponível")
+        mostrar_snackbar(f"Quarto {quarto.numero} marcado como disponível!")
+        atualizar_mapa_quartos()
+    
+    def atualizar_mapa_quartos():
+        """Atualiza o mapa visual de quartos"""
+        # Criar um grid para os cards de quartos
+        grid_quartos = ft.GridView(
+            expand=True,
+            runs_count=5,
+            max_extent=270,
+            child_aspect_ratio=1.2,
+            spacing=10,
+            run_spacing=10,
+            padding=20
+        )
+        
+        # Agrupar quartos por andar
+        quartos_por_andar = {}
+        for quarto in gerenciador.listar_quartos():
+            # Determinar o andar pelo primeiro dígito do número do quarto
+            andar = str(quarto.numero)[0]
+            if andar not in quartos_por_andar:
+                quartos_por_andar[andar] = []
+            quartos_por_andar[andar].append(quarto)
+        
+        # Criar um container para cada andar
+        andares_container = ft.Column(spacing=20, scroll=ft.ScrollMode.AUTO)
+        
+        # Ordenar os andares
+        for andar in sorted(quartos_por_andar.keys()):
+            # Criar um título para o andar
+            titulo_andar = ft.Text(f"Andar {andar}", size=20, weight=ft.FontWeight.BOLD)
+            
+            # Criar um grid para os quartos deste andar
+            grid_andar = ft.Row(
+                [criar_card_quarto(quarto) for quarto in sorted(quartos_por_andar[andar], key=lambda q: q.numero)],
+                scroll=ft.ScrollMode.AUTO,
+                spacing=10
+            )
+            
+            # Adicionar o título e o grid ao container de andares
+            andares_container.controls.append(titulo_andar)
+            andares_container.controls.append(grid_andar)
+        
+        # Criar o container principal
+        container_principal = ft.Container(
+            content=andares_container,
+            expand=True,
+            padding=20
+        )
+        
+        # Adicionar botão para adicionar novo quarto
+        botao_novo_quarto = ft.FloatingActionButton(
+            icon=ft.Icons.ADD,
+            text="Novo Quarto",
+            on_click=mostrar_dialogo_novo_quarto
+        )
+        
+        # Atualizar o conteúdo principal
+        conteudo_principal.content = ft.Column([
+            ft.Row([
+                ft.Text("Mapa de Quartos", size=24, weight=ft.FontWeight.BOLD)
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([
+                ft.Text("Legenda:", weight=ft.FontWeight.BOLD),
+                ft.Container(
+                    content=ft.Row([
+                        ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN),
+                        ft.Text("Disponível")
+                    ]),
+                    margin=ft.margin.only(left=10, right=10)
+                ),
+                ft.Container(
+                    content=ft.Row([
+                        ft.Icon(ft.Icons.NO_ACCOUNTS, color=ft.Colors.RED),
+                        ft.Text("Ocupado")
+                    ]),
+                    margin=ft.margin.only(right=10)
+                ),
+                ft.Container(
+                    content=ft.Row([
+                        ft.Icon(ft.Icons.CLEANING_SERVICES, color=ft.Colors.ORANGE),
+                        ft.Text("Limpeza Pendente")
+                    ])
+                )
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            container_principal
+        ])
+        
+        # Adicionar o botão flutuante
+        page.floating_action_button = botao_novo_quarto
+        
+        page.update()
+    
     # Funções de navegação
     def navegar_para(tela):
         tela_atual.current = tela
+        
+        # Remover o botão flutuante se existir
+        page.floating_action_button = None
         
         if tela == "inicial":
             mostrar_tela_inicial()
@@ -1037,6 +1416,8 @@ def main(page: ft.Page):
             mostrar_formulario_reserva()
         elif tela == "reservas":
             mostrar_tela_reservas()
+        elif tela == "mapa_quartos":
+            atualizar_mapa_quartos()
     
     # Funções para mostrar telas
     def mostrar_tela_inicial():
@@ -1231,6 +1612,11 @@ def main(page: ft.Page):
                 icon=ft.Icons.LIST_ALT,
                 tooltip="Ver Reservas",
                 on_click=lambda e: navegar_para("reservas")
+            ),
+            ft.IconButton(
+                icon=ft.Icons.DASHBOARD,
+                tooltip="Mapa de Quartos",
+                on_click=lambda e: navegar_para("mapa_quartos")
             ),
         ]
     )
