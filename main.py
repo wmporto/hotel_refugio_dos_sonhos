@@ -1,6 +1,7 @@
 import flet as ft
 import json
 import uuid
+import re
 from datetime import datetime, timedelta, date
 import os
 import calendar
@@ -8,10 +9,12 @@ from typing import List, Dict, Optional, Any, Tuple
 
 # Classes do modelo de dados
 class Cliente:
-    def __init__(self, nome: str, telefone: str, email: str, id: str = None):
+    def __init__(self, nome: str, telefone: str, email: str, cpf: str, id: str = None):
         self._nome = nome
         self._telefone = telefone
         self._email = email
+        self._cpf = self._formatar_cpf(cpf)
+        # Mantemos o ID para compatibilidade com dados existentes
         self._id = id if id else str(uuid.uuid4())
     
     @property
@@ -39,23 +42,79 @@ class Cliente:
         self._email = valor
     
     @property
+    def cpf(self) -> str:
+        return self._cpf
+    
+    @cpf.setter
+    def cpf(self, valor: str) -> None:
+        self._cpf = self._formatar_cpf(valor)
+    
+    @property
     def id(self) -> str:
         return self._id
+    
+    def _formatar_cpf(self, cpf: str) -> str:
+        """Remove caracteres não numéricos do CPF e formata"""
+        # Remover caracteres não numéricos
+        cpf_numerico = re.sub(r'[^0-9]', '', cpf)
+        
+        # Garantir que tenha 11 dígitos
+        if len(cpf_numerico) != 11:
+            return cpf_numerico  # Retorna sem formatação se não tiver 11 dígitos
+        
+        # Formatar como XXX.XXX.XXX-XX
+        return f"{cpf_numerico[:3]}.{cpf_numerico[3:6]}.{cpf_numerico[6:9]}-{cpf_numerico[9:]}"
+    
+    def validar_cpf(self) -> bool:
+        """Valida o CPF usando o algoritmo de verificação"""
+        # Remover caracteres não numéricos
+        cpf = re.sub(r'[^0-9]', '', self._cpf)
+        
+        # Verificar se tem 11 dígitos
+        if len(cpf) != 11:
+            return False
+        
+        # Verificar se todos os dígitos são iguais
+        if len(set(cpf)) == 1:
+            return False
+        
+        # Validar primeiro dígito verificador
+        soma = 0
+        for i in range(9):
+            soma += int(cpf[i]) * (10 - i)
+        resto = soma % 11
+        digito1 = 0 if resto < 2 else 11 - resto
+        
+        if int(cpf[9]) != digito1:
+            return False
+        
+        # Validar segundo dígito verificador
+        soma = 0
+        for i in range(10):
+            soma += int(cpf[i]) * (11 - i)
+        resto = soma % 11
+        digito2 = 0 if resto < 2 else 11 - resto
+        
+        return int(cpf[10]) == digito2
     
     def to_dict(self) -> Dict[str, Any]:
         return {
             "nome": self._nome,
             "telefone": self._telefone,
             "email": self._email,
+            "cpf": self._cpf,
             "id": self._id
         }
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Cliente':
+        # Compatibilidade com dados antigos que não têm CPF
+        cpf = data.get("cpf", "000.000.000-00")
         return cls(
             nome=data["nome"],
             telefone=data["telefone"],
             email=data["email"],
+            cpf=cpf,
             id=data["id"]
         )
 
@@ -212,9 +271,19 @@ class GerenciadorDeReservas:
         self._arquivo_dados = "dados_hotel.json"
         self._carregar_dados()
     
-    def adicionar_cliente(self, cliente: Cliente) -> None:
+    def adicionar_cliente(self, cliente: Cliente) -> bool:
+        # Verificar se o CPF é válido
+        if not cliente.validar_cpf():
+            return False
+        
+        # Verificar se já existe um cliente com este CPF
+        for c in self._clientes:
+            if re.sub(r'[^0-9]', '', c.cpf) == re.sub(r'[^0-9]', '', cliente.cpf):
+                return False
+        
         self._clientes.append(cliente)
         self._salvar_dados()
+        return True
     
     def obter_cliente_por_id(self, cliente_id: str) -> Optional[Cliente]:
         for cliente in self._clientes:
@@ -222,12 +291,37 @@ class GerenciadorDeReservas:
                 return cliente
         return None
     
-    def atualizar_cliente(self, cliente_id: str, nome: str, telefone: str, email: str) -> bool:
+    def obter_cliente_por_cpf(self, cpf: str) -> Optional[Cliente]:
+        cpf_numerico = re.sub(r'[^0-9]', '', cpf)
+        for cliente in self._clientes:
+            if re.sub(r'[^0-9]', '', cliente.cpf) == cpf_numerico:
+                return cliente
+        return None
+    
+    def atualizar_cliente(self, cliente_id: str, nome: str, telefone: str, email: str, cpf: str) -> bool:
         cliente = self.obter_cliente_por_id(cliente_id)
         if cliente:
+            # Verificar se o CPF foi alterado
+            cpf_numerico = re.sub(r'[^0-9]', '', cpf)
+            cpf_atual_numerico = re.sub(r'[^0-9]', '', cliente.cpf)
+            
+            if cpf_numerico != cpf_atual_numerico:
+                # Verificar se o novo CPF já está em uso
+                for c in self._clientes:
+                    if c.id != cliente_id and re.sub(r'[^0-9]', '', c.cpf) == cpf_numerico:
+                        return False
+                
+                # Atualizar o CPF
+                cliente.cpf = cpf
+                
+                # Verificar se o CPF é válido
+                if not cliente.validar_cpf():
+                    return False
+            
             cliente.nome = nome
             cliente.telefone = telefone
             cliente.email = email
+            
             self._salvar_dados()
             return True
         return False
@@ -477,6 +571,15 @@ class GerenciadorDeReservas:
             Quarto(301, "Suite", 400.0),
         ]
         
+        # Criar um cliente de exemplo com CPF
+        cliente = Cliente(
+            nome="Cliente Exemplo",
+            telefone="(11) 99999-9999",
+            email="exemplo@email.com",
+            cpf="123.456.789-09"  # CPF válido para exemplo
+        )
+        self._clientes.append(cliente)
+        
         # Salvar os dados iniciais
         self._salvar_dados()
 
@@ -518,6 +621,7 @@ def main(page: ft.Page):
     campo_nome = ft.TextField(label="Nome", width=300)
     campo_telefone = ft.TextField(label="Telefone", width=300)
     campo_email = ft.TextField(label="E-mail", width=300)
+    campo_cpf = ft.TextField(label="CPF", width=300, hint_text="Digite apenas números")
     
     dropdown_clientes = ft.Dropdown(label="Cliente", width=300)
     dropdown_quartos = ft.Dropdown(label="Quarto", width=300)
@@ -593,6 +697,7 @@ def main(page: ft.Page):
                             leading=ft.Icon(ft.Icons.PERSON),
                             title=ft.Text(cliente.nome),
                             subtitle=ft.Column([
+                                ft.Text(f"CPF: {cliente.cpf}"),
                                 ft.Text(f"Telefone: {cliente.telefone}"),
                                 ft.Text(f"E-mail: {cliente.email}")
                             ])
@@ -634,6 +739,7 @@ def main(page: ft.Page):
                             leading=ft.Icon(ft.Icons.BOOKMARK),
                             title=ft.Text(f"Reserva de {cliente.nome}"),
                             subtitle=ft.Column([
+                                ft.Text(f"CPF: {cliente.cpf}"),
                                 ft.Text(f"Quarto: {quarto.numero} - {quarto.tipo}"),
                                 ft.Text(f"Check-in: {reserva.check_in} | Check-out: {reserva.check_out}"),
                                 ft.Chip(
@@ -660,7 +766,7 @@ def main(page: ft.Page):
         
         for cliente in gerenciador.listar_clientes():
             dropdown_clientes.options.append(
-                ft.dropdown.Option(key=cliente.id, text=cliente.nome)
+                ft.dropdown.Option(key=cliente.id, text=f"{cliente.nome} (CPF: {cliente.cpf})")
             )
         
         if dropdown_clientes.options:
@@ -877,34 +983,42 @@ def main(page: ft.Page):
         nome = campo_nome.value
         telefone = campo_telefone.value
         email = campo_email.value
+        cpf = campo_cpf.value
         
-        if not nome or not telefone or not email:
+        if not nome or not telefone or not email or not cpf:
             mostrar_snackbar("Por favor, preencha todos os campos!")
             return
         
         if cliente_selecionado.current:
             # Atualizar cliente existente
-            gerenciador.atualizar_cliente(
+            if gerenciador.atualizar_cliente(
                 cliente_selecionado.current.id,
                 nome,
                 telefone,
-                email
-            )
-            mostrar_snackbar("Cliente atualizado com sucesso!")
+                email,
+                cpf
+            ):
+                mostrar_snackbar("Cliente atualizado com sucesso!")
+                cliente_selecionado.current = None
+                navegar_para("clientes")
+            else:
+                mostrar_snackbar("Erro ao atualizar cliente. Verifique se o CPF é válido e único.")
         else:
             # Criar novo cliente
-            cliente = Cliente(nome, telefone, email)
-            gerenciador.adicionar_cliente(cliente)
-            mostrar_snackbar("Cliente adicionado com sucesso!")
-        
-        cliente_selecionado.current = None
-        navegar_para("clientes")
+            cliente = Cliente(nome, telefone, email, cpf)
+            if gerenciador.adicionar_cliente(cliente):
+                mostrar_snackbar("Cliente adicionado com sucesso!")
+                cliente_selecionado.current = None
+                navegar_para("clientes")
+            else:
+                mostrar_snackbar("Erro ao adicionar cliente. Verifique se o CPF é válido e único.")
     
     def editar_cliente(cliente):
         cliente_selecionado.current = cliente
         campo_nome.value = cliente.nome
         campo_telefone.value = cliente.telefone
         campo_email.value = cliente.email
+        campo_cpf.value = cliente.cpf
         
         navegar_para("novo_cliente")
     
@@ -1021,7 +1135,7 @@ def main(page: ft.Page):
         texto_check_out_edit = ft.Text(f"Check-out: {formatar_data(data_check_out_atual)}")
         
         # Campos do formulário
-        campo_cliente = ft.TextField(label="Cliente", value=cliente.nome, disabled=True)
+        campo_cliente = ft.TextField(label="Cliente", value=f"{cliente.nome} (CPF: {cliente.cpf})", disabled=True)
         campo_quarto = ft.TextField(label="Quarto", value=f"{quarto.numero} - {quarto.tipo}", disabled=True)
         
         def selecionar_data_check_in_edit(e):
@@ -1192,6 +1306,7 @@ def main(page: ft.Page):
             if cliente:
                 conteudo_card.append(ft.Divider())
                 conteudo_card.append(ft.Text(f"Hóspede: {cliente.nome}", size=12))
+                conteudo_card.append(ft.Text(f"CPF: {cliente.cpf}", size=12))
                 conteudo_card.append(ft.Text(f"Check-in: {reserva_atual.check_in}", size=12))
                 conteudo_card.append(ft.Text(f"Check-out: {reserva_atual.check_out}", size=12))
         
@@ -1399,6 +1514,84 @@ def main(page: ft.Page):
         
         page.update()
     
+    # Funções para buscar cliente por CPF
+    def buscar_cliente_por_cpf(e=None):
+        """Busca um cliente pelo CPF"""
+        cpf = campo_busca_cpf.value
+        if not cpf:
+            mostrar_snackbar("Por favor, digite um CPF para buscar")
+            return
+        
+        # Remover caracteres não numéricos
+        cpf_numerico = re.sub(r'[^0-9]', '', cpf)
+        
+        # Verificar se tem pelo menos alguns dígitos
+        if len(cpf_numerico) < 3:
+            mostrar_snackbar("Por favor, digite um CPF válido")
+            return
+        
+        # Buscar cliente
+        cliente = gerenciador.obter_cliente_por_cpf(cpf_numerico)
+        if cliente:
+            # Mostrar informações do cliente
+            mostrar_dialogo_cliente_encontrado(cliente)
+        else:
+            mostrar_snackbar("Cliente não encontrado")
+    
+    def mostrar_dialogo_cliente_encontrado(cliente):
+        """Mostra um diálogo com as informações do cliente encontrado"""
+        def fechar_dialogo(e):
+            dialogo.open = False
+            page.update()
+        
+        def editar_cliente_encontrado(e):
+            fechar_dialogo(e)
+            editar_cliente(cliente)
+        
+        def fazer_reserva_cliente(e):
+            fechar_dialogo(e)
+            # Pré-selecionar o cliente no dropdown
+            for opcao in dropdown_clientes.options:
+                if opcao.key == cliente.id:
+                    dropdown_clientes.value = opcao.key
+                    break
+            navegar_para("nova_reserva")
+        
+        # Criar o diálogo
+        dialogo = ft.AlertDialog(
+            title=ft.Text("Cliente Encontrado"),
+            content=ft.Column([
+                ft.Text(f"Nome: {cliente.nome}"),
+                ft.Text(f"CPF: {cliente.cpf}"),
+                ft.Text(f"Telefone: {cliente.telefone}"),
+                ft.Text(f"E-mail: {cliente.email}")
+            ], tight=True, spacing=10),
+            actions=[
+                ft.TextButton("Fechar", on_click=fechar_dialogo),
+                ft.TextButton("Editar", on_click=editar_cliente_encontrado),
+                ft.TextButton("Fazer Reserva", on_click=fazer_reserva_cliente)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        page.dialog = dialogo
+        dialogo.open = True
+        page.update()
+    
+    # Campo para busca de cliente por CPF
+    campo_busca_cpf = ft.TextField(
+        label="Buscar Cliente por CPF",
+        hint_text="Digite o CPF do cliente",
+        width=300,
+        on_submit=buscar_cliente_por_cpf
+    )
+    
+    botao_buscar_cpf = ft.ElevatedButton(
+        text="Buscar",
+        icon=ft.Icons.SEARCH,
+        on_click=buscar_cliente_por_cpf
+    )
+    
     # Funções de navegação
     def navegar_para(tela):
         tela_atual.current = tela
@@ -1425,7 +1618,15 @@ def main(page: ft.Page):
         
         conteudo_principal.content = ft.Column([
             ft.Row([
-                ft.Text("Quartos Disponíveis", size=24, weight=ft.FontWeight.BOLD)
+                ft.Text("Refúgio dos Sonhos - Sistema de Gerenciamento", size=24, weight=ft.FontWeight.BOLD)
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([
+                campo_busca_cpf,
+                botao_buscar_cpf
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Divider(),
+            ft.Row([
+                ft.Text("Quartos Disponíveis", size=20, weight=ft.FontWeight.BOLD)
             ], alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([
                 ft.ElevatedButton(
@@ -1447,6 +1648,10 @@ def main(page: ft.Page):
                 ft.Text("Gerenciamento de Clientes", size=24, weight=ft.FontWeight.BOLD)
             ], alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([
+                campo_busca_cpf,
+                botao_buscar_cpf
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([
                 ft.ElevatedButton(
                     text="Adicionar Novo Cliente",
                     icon=ft.Icons.PERSON_ADD,
@@ -1464,6 +1669,7 @@ def main(page: ft.Page):
             campo_nome.value = ""
             campo_telefone.value = ""
             campo_email.value = ""
+            campo_cpf.value = ""
         
         botao_salvar = ft.ElevatedButton(
             text="Salvar Cliente",
@@ -1487,6 +1693,7 @@ def main(page: ft.Page):
             ft.Container(
                 content=ft.Column([
                     campo_nome,
+                    campo_cpf,
                     campo_telefone,
                     campo_email,
                     ft.Row([
@@ -1574,6 +1781,10 @@ def main(page: ft.Page):
         conteudo_principal.content = ft.Column([
             ft.Row([
                 ft.Text("Gerenciamento de Reservas", size=24, weight=ft.FontWeight.BOLD)
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([
+                campo_busca_cpf,
+                botao_buscar_cpf
             ], alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([
                 ft.ElevatedButton(
