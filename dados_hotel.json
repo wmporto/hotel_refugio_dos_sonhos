@@ -93,6 +93,30 @@
             "check_out": "29-04-2025",
             "status": "Pendente",
             "id": "a3820ce1-ae1b-49c1-ac77-4f3a7c2919c2"
+        },
+        {
+            "cliente_id": "be7219e8-4f09-455d-b8c7-320c453faa52",
+            "quarto_numero": 101,
+            "check_in": "18-04-2025",
+            "check_out": "23-04-2025",
+            "status": "Pendente",
+            "id": "77e1e698-8efd-46df-a114-138ce14dbb6e"
+        },
+        {
+            "cliente_id": "be7219e8-4f09-455d-b8c7-320c453faa52",
+            "quarto_numero": 102,
+            "check_in": "11-04-2025",
+            "check_out": "12-04-2025",
+            "status": "Pendente",
+            "id": "b6c50b61-707c-4767-9756-a25bcd75239f"
+        },
+        {
+            "cliente_id": "be7219e8-4f09-455d-b8c7-320c453faa52",
+            "quarto_numero": 201,
+            "check_in": "11-04-2025",
+            "check_out": "12-04-2025",
+            "status": "Pendente",
+            "id": "7b685f1e-8638-4e93-ab75-aaeea9009694"
         }
     ]
 }

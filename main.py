@@ -475,12 +475,12 @@ def main(page: ft.Page):
                 content=ft.Container(
                     content=ft.Column([
                         ft.ListTile(
-                            leading=ft.Icon(ft.icons.HOTEL),
+                            leading=ft.Icon(ft.Icons.KING_BED),
                             title=ft.Text(f"Quarto {quarto.numero} - {quarto.tipo}"),
                             subtitle=ft.Text(f"Preço: R$ {quarto.preco:.2f} / diária"),
                             trailing=ft.Chip(
                                 label=ft.Text("Disponível" if disponivel else "Ocupado"),
-                                bgcolor=ft.colors.GREEN if disponivel else ft.colors.RED,
+                                bgcolor=ft.Colors.GREEN if disponivel else ft.Colors.RED,
                             ),
                         ),
                         ft.Row([
@@ -504,7 +504,7 @@ def main(page: ft.Page):
                 content=ft.Container(
                     content=ft.Column([
                         ft.ListTile(
-                            leading=ft.Icon(ft.icons.PERSON),
+                            leading=ft.Icon(ft.Icons.PERSON),
                             title=ft.Text(cliente.nome),
                             subtitle=ft.Column([
                                 ft.Text(f"Telefone: {cliente.telefone}"),
@@ -535,17 +535,17 @@ def main(page: ft.Page):
                 continue
             
             cor_status = {
-                "Confirmada": ft.colors.GREEN,
-                "Pendente": ft.colors.ORANGE,
-                "Cancelada": ft.colors.RED,
-                "Concluída": ft.colors.BLUE
-            }.get(reserva.status, ft.colors.GREY)
+                "Confirmada": ft.Colors.GREEN,
+                "Pendente": ft.Colors.ORANGE,
+                "Cancelada": ft.Colors.RED,
+                "Concluída": ft.Colors.BLUE
+            }.get(reserva.status, ft.Colors.GREY)
             
             card_reserva = ft.Card(
                 content=ft.Container(
                     content=ft.Column([
                         ft.ListTile(
-                            leading=ft.Icon(ft.icons.BOOK_ONLINE),
+                            leading=ft.Icon(ft.Icons.BOOKMARK),
                             title=ft.Text(f"Reserva de {cliente.nome}"),
                             subtitle=ft.Column([
                                 ft.Text(f"Quarto: {quarto.numero} - {quarto.tipo}"),
@@ -766,9 +766,6 @@ def main(page: ft.Page):
         else:
             # Criar novo cliente
             cliente = Cliente(nome, telefone, email)
-             
-            # Criar novo cliente
-            cliente = Cliente(nome, telefone, email)
             gerenciador.adicionar_cliente(cliente)
             mostrar_snackbar("Cliente adicionado com sucesso!")
         
@@ -776,7 +773,7 @@ def main(page: ft.Page):
         navegar_para("clientes")
     
     def editar_cliente(cliente):
-        cliente_selecionado.current = cliente
+        cliente_selecionado.current =  cliente
         campo_nome.value = cliente.nome
         campo_telefone.value = cliente.telefone
         campo_email.value = cliente.email
@@ -971,7 +968,7 @@ def main(page: ft.Page):
                         texto_check_in_edit,
                         ft.ElevatedButton(
                             "Selecionar Data",
-                            icon=ft.icons.CALENDAR_TODAY,
+                            icon=ft.Icons.CALENDAR_MONTH,
                             on_click=selecionar_data_check_in_edit
                         )
                     ]),
@@ -980,7 +977,7 @@ def main(page: ft.Page):
                         texto_check_out_edit,
                         ft.ElevatedButton(
                             "Selecionar Data",
-                            icon=ft.icons.CALENDAR_TODAY,
+                            icon=ft.Icons.CALENDAR_MONTH,
                             on_click=selecionar_data_check_out_edit
                         )
                     ])
@@ -1052,7 +1049,7 @@ def main(page: ft.Page):
             ft.Row([
                 ft.ElevatedButton(
                     text="Adicionar Novo Quarto",
-                    icon=ft.icons.ADD,
+                    icon=ft.Icons.ADD,
                     on_click=mostrar_dialogo_novo_quarto
                 )
             ], alignment=ft.MainAxisAlignment.CENTER),
@@ -1066,19 +1063,19 @@ def main(page: ft.Page):
         
         conteudo_principal.content = ft.Column([
             ft.Row([
-                ft.Text("Gerenciamento de Hóspedes", size=24, weight=ft.FontWeight.BOLD)
+                ft.Text("Gerenciamento de Clientes", size=24, weight=ft.FontWeight.BOLD)
             ], alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([
                 ft.ElevatedButton(
                     text="Adicionar Novo Cliente",
-                    icon=ft.icons.PERSON_ADD,
+                    icon=ft.Icons.PERSON_ADD,
                     on_click=lambda e: navegar_para("novo_cliente")
                 )
-            ], alignment=ft.MainAxisAlignment.CENTER)
-        ]),
-        lista_clientes
-    alignment=ft.MainAxisAlignment.START, expand=True
-    page.update()
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            lista_clientes
+        ], alignment=ft.MainAxisAlignment.START, expand=True)
+        
+        page.update()
     
     def mostrar_formulario_cliente():
         # Limpar campos se não estiver editando
@@ -1089,7 +1086,7 @@ def main(page: ft.Page):
         
         botao_salvar = ft.ElevatedButton(
             text="Salvar Cliente",
-            icon=ft.icons.SAVE,
+            icon=ft.Icons.SAVE,
             on_click=salvar_cliente
         )
         
@@ -1127,9 +1124,10 @@ def main(page: ft.Page):
         # Atualizar dropdowns
         atualizar_dropdown_clientes()
         
-        # Preencher com valor padrão
-        data_check_in.current = datetime.now().date()
-        data_check_out.current = datetime.now().date() + timedelta(days=1)
+        # Inicializar datas
+        data_check_in.current = datetime.now()
+        data_check_out.current = datetime.now() + timedelta(days=1)
+        
         # Atualizar textos
         texto_check_in.value = f"Check-in: {formatar_data(data_check_in.current)}"
         texto_check_out.value = f"Check-out: {formatar_data(data_check_out.current)}"
@@ -1139,7 +1137,7 @@ def main(page: ft.Page):
         
         botao_salvar = ft.ElevatedButton(
             text="Fazer Reserva",
-            icon=ft.icons.NEW_ICON,
+            icon=ft.Icons.BOOKMARK_ADD,
             on_click=salvar_reserva
         )
         
@@ -1161,7 +1159,7 @@ def main(page: ft.Page):
                             texto_check_in,
                             ft.ElevatedButton(
                                 "Selecionar Data",
-                                icon=ft.icons.CALENDAR_TODAY,
+                                icon=ft.Icons.CALENDAR_MONTH,
                                 on_click=selecionar_data_check_in
                             )
                         ]),
@@ -1170,7 +1168,7 @@ def main(page: ft.Page):
                             texto_check_out,
                             ft.ElevatedButton(
                                 "Selecionar Data",
-                                icon=ft.icons.CALENDAR_TODAY,
+                                icon=ft.Icons.CALENDAR_MONTH,
                                 on_click=selecionar_data_check_out
                             )
                         ])
@@ -1199,7 +1197,7 @@ def main(page: ft.Page):
             ft.Row([
                 ft.ElevatedButton(
                     text="Nova Reserva",
-                    icon=ft.icons.ADD,
+                    icon=ft.Icons.ADD,
                     on_click=lambda e: navegar_para("nova_reserva")
                 )
             ], alignment=ft.MainAxisAlignment.CENTER),
@@ -1212,25 +1210,25 @@ def main(page: ft.Page):
     barra_navegacao = ft.AppBar(
         title=ft.Text("Refúgio dos Sonhos"),
         center_title=True,
-        bgcolor=ft.colors.BLUE,
+        bgcolor=ft.Colors.BLUE_700,
         actions=[
             ft.IconButton(
-                icon=ft.icons.HOME,
+                icon=ft.Icons.HOME,
                 tooltip="Tela Inicial",
                 on_click=lambda e: navegar_para("inicial")
             ),
             ft.IconButton(
-                icon=ft.icons.PERSON,
+                icon=ft.Icons.PERSON,
                 tooltip="Gerenciar Clientes",
                 on_click=lambda e: navegar_para("clientes")
             ),
             ft.IconButton(
-                icon=ft.icons.BOOK_ONLINE,
+                icon=ft.Icons.BOOKMARK_ADD,
                 tooltip="Fazer Reserva",
                 on_click=lambda e: navegar_para("nova_reserva")
             ),
             ft.IconButton(
-                icon=ft.icons.LIST,
+                icon=ft.Icons.LIST_ALT,
                 tooltip="Ver Reservas",
                 on_click=lambda e: navegar_para("reservas")
             ),
