@@ -1,9 +1,10 @@
 import flet as ft
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import os
-from typing import List, Dict, Optional, Any
+import calendar
+from typing import List, Dict, Optional, Any, Tuple
 
 # Classes do modelo de dados
 class Cliente:
@@ -409,8 +410,8 @@ def formatar_data(data: datetime) -> str:
 def main(page: ft.Page):
     # Configurações da página
     page.title = "Refúgio dos Sonhos - Sistema de Gerenciamento"
-    page.theme_mode = ft.ThemeMode.DARK
-    page.window_width = 1000
+    page.theme_mode = ft.ThemeMode.LIGHT
+    page.window_width = 1200
     page.window_height = 800
     page.padding = 20
     
@@ -422,6 +423,10 @@ def main(page: ft.Page):
     tela_atual.current = "inicial"
     
     cliente_selecionado = ft.Ref[Cliente]()
+    
+    # Data atual para o calendário
+    data_calendario = ft.Ref[datetime]()
+    data_calendario.current = datetime.now()
     
     # Elementos da interface
     lista_quartos = ft.ListView(expand=True, spacing=10, padding=20)
@@ -773,7 +778,7 @@ def main(page: ft.Page):
         navegar_para("clientes")
     
     def editar_cliente(cliente):
-        cliente_selecionado.current =  cliente
+        cliente_selecionado.current = cliente
         campo_nome.value = cliente.nome
         campo_telefone.value = cliente.telefone
         campo_email.value = cliente.email
@@ -955,6 +960,10 @@ def main(page: ft.Page):
             mostrar_snackbar("Reserva atualizada com sucesso!")
             atualizar_lista_reservas()
             fechar_dialogo(e)
+            
+            # Se estiver na tela de calendário, atualizar o calendário
+            if tela_atual.current == "calendario":
+                atualizar_calendario()
         
         # Criar o diálogo
         dialogo = ft.AlertDialog(
@@ -1000,6 +1009,11 @@ def main(page: ft.Page):
             if gerenciador.cancelar_reserva(reserva.id):
                 mostrar_snackbar("Reserva cancelada com sucesso!")
                 atualizar_lista_reservas()
+                
+                # Se estiver na tela de calendário, atualizar o calendário
+                if tela_atual.current == "calendario":
+                    atualizar_calendario()
+                
                 fechar_dialogo(e)
             else:
                 mostrar_snackbar("Erro ao cancelar a reserva!")
@@ -1023,6 +1037,405 @@ def main(page: ft.Page):
         dialogo.open = True
         page.update()
     
+    # Funções para o calendário de reservas
+    def criar_reserva_no_calendario(quarto_numero: int, data_inicio: datetime):
+        # Obter a lista de clientes para o dropdown
+        clientes = gerenciador.listar_clientes()
+        if not clientes:
+            mostrar_snackbar("Não há clientes cadastrados. Cadastre um cliente primeiro.")
+            return
+        
+        # Configurar datas iniciais
+        data_check_in_cal = data_inicio
+        data_check_out_cal = data_inicio + timedelta(days=1)
+        
+        # Dropdown de clientes
+        dropdown_clientes_cal = ft.Dropdown(
+            label="Cliente",
+            options=[ft.dropdown.Option(key=c.id, text=c.nome) for c in clientes],
+            value=clientes[0].id
+        )
+        
+        # Textos para exibir as datas
+        texto_check_in_cal = ft.Text(f"Check-in: {formatar_data(data_check_in_cal)}")
+        texto_check_out_cal = ft.Text(f"Check-out: {formatar_data(data_check_out_cal)}")
+        
+        # Referências para as datas
+        ref_data_check_in = ft.Ref[datetime]()
+        ref_data_check_in.current = data_check_in_cal
+        
+        ref_data_check_out = ft.Ref[datetime]()
+        ref_data_check_out.current = data_check_out_cal
+        
+        def selecionar_data_check_in_cal(e):
+            def handle_date_picker_change(e):
+                ref_data_check_in.current = e.control.value
+                texto_check_in_cal.value = f"Check-in: {formatar_data(ref_data_check_in.current)}"
+                page.update()
+            
+            # Abrir o DatePicker
+            page.open(
+                ft.DatePicker(
+                    first_date=datetime.now(),
+                    last_date=datetime(year=datetime.now().year + 5, month=12, day=31),
+                    current_date=ref_data_check_in.current,
+                    on_change=handle_date_picker_change,
+                )
+            )
+        
+        def selecionar_data_check_out_cal(e):
+            def handle_date_picker_change(e):
+                ref_data_check_out.current = e.control.value
+                texto_check_out_cal.value = f"Check-out: {formatar_data(ref_data_check_out.current)}"
+                page.update()
+            
+            # Abrir o DatePicker
+            page.open(
+                ft.DatePicker(
+                    first_date=datetime.now(),
+                    last_date=datetime(year=datetime.now().year + 5, month=12, day=31),
+                    current_date=ref_data_check_out.current,
+                    on_change=handle_date_picker_change,
+                )
+            )
+        
+        def fechar_dialogo(e):
+            dialogo.open = False
+            page.update()
+        
+        def salvar_reserva_cal(e):
+            cliente_id = dropdown_clientes_cal.value
+            
+            # Converter datas para string no formato DD-MM-YYYY
+            check_in = formatar_data(ref_data_check_in.current)
+            check_out = formatar_data(ref_data_check_out.current)
+            
+            # Verificar se check-out é posterior a check-in
+            if ref_data_check_out.current <= ref_data_check_in.current:
+                mostrar_snackbar("A data de check-out deve ser posterior à data de check-in!")
+                return
+            
+            reserva = gerenciador.criar_reserva(cliente_id, quarto_numero, check_in, check_out)
+            
+            if reserva:
+                mostrar_snackbar("Reserva criada com sucesso!")
+                atualizar_calendario()
+                fechar_dialogo(e)
+            else:
+                mostrar_snackbar("Não foi possível criar a reserva. Verifique a disponibilidade do quarto nas datas selecionadas.")
+        
+        # Criar o diálogo
+        dialogo = ft.AlertDialog(
+            title=ft.Text(f"Nova Reserva - Quarto {quarto_numero}"),
+            content=ft.Column([
+                dropdown_clientes_cal,
+                ft.Row([
+                    ft.Column([
+                        ft.Text("Check-in:"),
+                        texto_check_in_cal,
+                        ft.ElevatedButton(
+                            "Selecionar Data",
+                            icon=ft.Icons.CALENDAR_MONTH,
+                            on_click=selecionar_data_check_in_cal
+                        )
+                    ]),
+                    ft.Column([
+                        ft.Text("Check-out:"),
+                        texto_check_out_cal,
+                        ft.ElevatedButton(
+                            "Selecionar Data",
+                            icon=ft.Icons.CALENDAR_MONTH,
+                            on_click=selecionar_data_check_out_cal
+                        )
+                    ])
+                ])
+            ], tight=True, spacing=20, width=400),
+            actions=[
+                ft.TextButton("Cancelar", on_click=fechar_dialogo),
+                ft.TextButton("Salvar", on_click=salvar_reserva_cal)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        page.dialog = dialogo
+        dialogo.open = True
+        page.update()
+    
+    def obter_dias_do_mes(ano: int, mes: int) -> int:
+        """Retorna o número de dias em um mês específico"""
+        return calendar.monthrange(ano, mes)[1]
+    
+    def obter_reservas_do_periodo(data_inicio: datetime, data_fim: datetime) -> Dict[int, List[Tuple[Reserva, str, str]]]:
+        """
+        Retorna um dicionário com as reservas do período agrupadas por número de quarto
+        Cada item da lista é uma tupla (reserva, data_inicio_formatada, data_fim_formatada)
+        """
+        reservas_por_quarto = {}
+        
+        # Inicializar o dicionário com listas vazias para cada quarto
+        for quarto in gerenciador.listar_quartos():
+            reservas_por_quarto[quarto.numero] = []
+        
+        # Filtrar reservas que se sobrepõem ao período
+        for reserva in gerenciador.listar_reservas():
+            if reserva.status == "Cancelada":
+                continue
+                
+            try:
+                reserva_check_in = datetime.strptime(reserva.check_in, "%d-%m-%Y")
+                reserva_check_out = datetime.strptime(reserva.check_out, "%d-%m-%Y")
+                
+                # Verificar se a reserva se sobrepõe ao período
+                if not (reserva_check_out <= data_inicio or reserva_check_in >= data_fim):
+                    # Calcular as datas de início e fim dentro do período visível
+                    inicio_visivel = max(reserva_check_in, data_inicio)
+                    fim_visivel = min(reserva_check_out, data_fim)
+                    
+                    # Adicionar à lista do quarto correspondente
+                    if reserva.quarto_numero in reservas_por_quarto:
+                        reservas_por_quarto[reserva.quarto_numero].append(
+                            (reserva, inicio_visivel, fim_visivel)
+                        )
+            except ValueError:
+                # Ignorar reservas com formato de data inválido
+                continue
+        
+        return reservas_por_quarto
+    
+    def criar_bloco_reserva(reserva: Reserva, data_inicio: datetime, data_fim: datetime, largura_dia: float) -> ft.Container:
+        """Cria um bloco visual para representar uma reserva no calendário"""
+        cliente = gerenciador.obter_cliente_por_id(reserva.cliente_id)
+        nome_cliente = cliente.nome if cliente else "Cliente desconhecido"
+        
+        # Determinar a cor com base no status
+        cores_status = {
+            "Confirmada": ft.Colors.GREEN,
+            "Pendente": ft.Colors.ORANGE,
+            "Concluída": ft.Colors.BLUE,
+            "Cancelada": ft.Colors.RED  # Não deve aparecer, mas por precaução
+        }
+        cor_fundo = cores_status.get(reserva.status, ft.Colors.GREY)
+        
+        # Calcular a posição e largura do bloco
+        inicio = datetime.strptime(reserva.check_in, "%d-%m-%Y")
+        fim = datetime.strptime(reserva.check_out, "%d-%m-%Y")
+        
+        # Ajustar para o período visível
+        inicio_visivel = max(inicio, data_inicio)
+        fim_visivel = min(fim, data_fim)
+        
+        # Calcular o deslocamento (em dias) desde o início do período visível
+        deslocamento_dias = (inicio_visivel - data_inicio).days
+        # Calcular a largura (em dias)
+        largura_dias = (fim_visivel - inicio_visivel).days
+        if largura_dias < 1:
+            largura_dias = 1  # Garantir que a reserva seja visível mesmo se for apenas um dia
+        
+        # Criar o container para a reserva
+        container = ft.Container(
+            content=ft.Column([
+                ft.Text(
+                    nome_cliente,
+                    size=12,
+                    color=ft.Colors.WHITE,
+                    overflow=ft.TextOverflow.ELLIPSIS
+                ),
+                ft.Text(
+                    f"{reserva.check_in} - {reserva.check_out}",
+                    size=10,
+                    color=ft.Colors.WHITE,
+                    overflow=ft.TextOverflow.ELLIPSIS
+                )
+            ], spacing=2, tight=True),
+            bgcolor=cor_fundo,
+            border_radius=5,
+            padding=5,
+            width=largura_dias * largura_dia,
+            margin=ft.margin.only(left=deslocamento_dias * largura_dia),
+            on_click=lambda e, r=reserva: editar_reserva(r)
+        )
+        
+        return container
+    
+    def atualizar_calendario():
+        """Atualiza a visualização do calendário de reservas"""
+        # Obter o ano e mês atuais do calendário
+        ano = data_calendario.current.year
+        mes = data_calendario.current.month
+        
+        # Determinar o primeiro e último dia do mês
+        primeiro_dia = datetime(ano, mes, 1)
+        ultimo_dia = datetime(ano, mes, obter_dias_do_mes(ano, mes))
+        
+        # Criar o cabeçalho com o mês e ano
+        cabecalho_mes = ft.Text(
+            f"{calendar.month_name[mes]} {ano}",
+            size=24,
+            weight=ft.FontWeight.BOLD
+        )
+        
+        # Botões para navegar entre os meses
+        def mes_anterior(e):
+            if data_calendario.current.month == 1:
+                data_calendario.current = datetime(data_calendario.current.year - 1, 12, 1)
+            else:
+                data_calendario.current = datetime(data_calendario.current.year, data_calendario.current.month - 1, 1)
+            atualizar_calendario()
+        
+        def mes_seguinte(e):
+            if data_calendario.current.month == 12:
+                data_calendario.current = datetime(data_calendario.current.year + 1, 1, 1)
+            else:
+                data_calendario.current = datetime(data_calendario.current.year, data_calendario.current.month + 1, 1)
+            atualizar_calendario()
+        
+        botao_anterior = ft.IconButton(
+            icon=ft.Icons.ARROW_BACK,
+            on_click=mes_anterior,
+            tooltip="Mês anterior"
+        )
+        
+        botao_seguinte = ft.IconButton(
+            icon=ft.Icons.ARROW_FORWARD,
+            on_click=mes_seguinte,
+            tooltip="Mês seguinte"
+        )
+        
+        botao_hoje = ft.ElevatedButton(
+            "Hoje",
+            on_click=lambda e: (setattr(data_calendario, "current", datetime.now()), atualizar_calendario())
+        )
+        
+        # Criar o cabeçalho com os dias do mês
+        dias_cabecalho = ft.Row(spacing=0, tight=True)
+        
+        # Largura de cada coluna de dia (em pixels)
+        largura_dia = 40
+        
+        # Adicionar coluna para os nomes dos quartos
+        dias_cabecalho.controls.append(
+            ft.Container(
+                content=ft.Text("Quartos", weight=ft.FontWeight.BOLD),
+                width=100,
+                height=40,
+                alignment=ft.alignment.center,
+                bgcolor=ft.Colors.BLUE_100,
+                border=ft.border.all(1, ft.Colors.BLUE_200)
+            )
+        )
+        
+        # Adicionar colunas para cada dia do mês
+        for dia in range(1, obter_dias_do_mes(ano, mes) + 1):
+            data = datetime(ano, mes, dia)
+            # Destacar o dia atual
+            cor_fundo = ft.Colors.BLUE_200 if data.date() == datetime.now().date() else ft.Colors.BLUE_100
+            
+            dias_cabecalho.controls.append(
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text(
+                            calendar.day_abbr[data.weekday()],
+                            size=10,
+                            weight=ft.FontWeight.BOLD
+                        ),
+                        ft.Text(
+                            str(dia),
+                            size=14,
+                            weight=ft.FontWeight.BOLD
+                        )
+                    ], spacing=2, alignment=ft.MainAxisAlignment.CENTER),
+                    width=largura_dia,
+                    height=40,
+                    alignment=ft.alignment.center,
+                    bgcolor=cor_fundo,
+                    border=ft.border.all(1, ft.Colors.BLUE_200)
+                )
+            )
+        
+        # Obter as reservas para o período
+        reservas_por_quarto = obter_reservas_do_periodo(primeiro_dia, ultimo_dia + timedelta(days=1))
+        
+        # Criar as linhas para cada quarto
+        linhas_quartos = ft.Column(spacing=0, tight=True)
+        
+        for quarto in sorted(gerenciador.listar_quartos(), key=lambda q: q.numero):
+            # Criar a linha para o quarto
+            linha_quarto = ft.Row(spacing=0, tight=True)
+            
+            # Adicionar o nome do quarto
+            linha_quarto.controls.append(
+                ft.Container(
+                    content=ft.Text(f"Quarto {quarto.numero}\n{quarto.tipo}", size=12),
+                    width=100,
+                    height=50,
+                    alignment=ft.alignment.center,
+                    bgcolor=ft.Colors.GREY_100,
+                    border=ft.border.all(1, ft.Colors.GREY_300)
+                )
+            )
+            
+            # Criar o container para os dias do mês
+            container_dias = ft.Container(
+                content=ft.Stack(
+                    [
+                        # Fundo com grid de dias
+                        ft.Row(
+                            [
+                                ft.Container(
+                                    width=largura_dia,
+                                    height=50,
+                                    border=ft.border.all(1, ft.Colors.GREY_300),
+                                    on_click=lambda e, q=quarto.numero, d=datetime(ano, mes, dia): criar_reserva_no_calendario(q, d)
+                                )
+                                for dia in range(1, obter_dias_do_mes(ano, mes) + 1)
+                            ],
+                            spacing=0,
+                            tight=True
+                        ),
+                        # Reservas para este quarto
+                        ft.Stack(
+                            [
+                                criar_bloco_reserva(reserva, primeiro_dia, ultimo_dia + timedelta(days=1), largura_dia)
+                                for reserva, _, _ in reservas_por_quarto.get(quarto.numero, [])
+                            ]
+                        )
+                    ]
+                ),
+                width=largura_dia * obter_dias_do_mes(ano, mes),
+                height=50
+            )
+            
+            linha_quarto.controls.append(container_dias)
+            linhas_quartos.controls.append(linha_quarto)
+        
+        # Criar o scroll container para o calendário
+        calendario_scroll = ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    botao_anterior,
+                    cabecalho_mes,
+                    botao_seguinte,
+                    botao_hoje
+                ], alignment=ft.MainAxisAlignment.CENTER),
+                ft.Container(
+                    content=ft.Column([
+                        dias_cabecalho,
+                        linhas_quartos
+                    ], spacing=0, tight=True),
+                    border_radius=10,
+                    border=ft.border.all(2, ft.Colors.BLUE_400),
+                    clip_behavior=ft.ClipBehavior.HARD_EDGE
+                )
+            ]),
+            expand=True,
+            padding=20,
+            scroll=ft.ScrollMode.ALWAYS
+        )
+        
+        # Atualizar o conteúdo principal
+        conteudo_principal.content = calendario_scroll
+        page.update()
+    
     # Funções de navegação
     def navegar_para(tela):
         tela_atual.current = tela
@@ -1037,6 +1450,8 @@ def main(page: ft.Page):
             mostrar_formulario_reserva()
         elif tela == "reservas":
             mostrar_tela_reservas()
+        elif tela == "calendario":
+            atualizar_calendario()
     
     # Funções para mostrar telas
     def mostrar_tela_inicial():
@@ -1231,6 +1646,11 @@ def main(page: ft.Page):
                 icon=ft.Icons.LIST_ALT,
                 tooltip="Ver Reservas",
                 on_click=lambda e: navegar_para("reservas")
+            ),
+            ft.IconButton(
+                icon=ft.Icons.CALENDAR_VIEW_MONTH,
+                tooltip="Calendário de Reservas",
+                on_click=lambda e: navegar_para("calendario")
             ),
         ]
     )
