@@ -409,7 +409,7 @@ def formatar_data(data: datetime) -> str:
 def main(page: ft.Page):
     # Configurações da página
     page.title = "Refúgio dos Sonhos - Sistema de Gerenciamento"
-    page.theme_mode = ft.ThemeMode.DARK
+    page.theme_mode = ft.ThemeMode.LIGHT
     page.window_width = 1000
     page.window_height = 800
     page.padding = 20
@@ -471,29 +471,88 @@ def main(page: ft.Page):
                 formatar_data(datetime.now() + timedelta(days=1))
             )
             
-            card_quarto = ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.ListTile(
-                            leading=ft.Icon(ft.Icons.KING_BED),
-                            title=ft.Text(f"Quarto {quarto.numero} - {quarto.tipo}"),
-                            subtitle=ft.Text(f"Preço: R$ {quarto.preco:.2f} / diária"),
-                            trailing=ft.Chip(
-                                label=ft.Text("Disponível" if disponivel else "Ocupado"),
-                                bgcolor=ft.Colors.GREEN if disponivel else ft.Colors.RED,
-                            ),
+            # Definir cores e ícones com base na disponibilidade
+            cor_fundo = ft.colors.GREEN_50 if disponivel else ft.colors.RED_50
+            cor_borda = ft.colors.GREEN if disponivel else ft.colors.RED
+            icone = ft.icons.CHECK_CIRCLE if disponivel else ft.icons.DO_NOT_DISTURB
+            status_texto = "Disponível" if disponivel else "Ocupado"
+            
+            # Criar um card para o quarto com visual melhorado
+            card_quarto = ft.Container(
+                content=ft.Row([
+                    # Ícone e informações do quarto
+                    ft.Row([
+                        ft.Icon(
+                            name=ft.icons.KING_BED,
+                            size=30,
+                            color=ft.colors.BLUE_700
                         ),
-                        ft.Row([
-                            ft.TextButton("Editar", on_click=lambda e, q=quarto: mostrar_dialogo_editar_quarto(q)),
-                            ft.TextButton("Excluir", on_click=lambda e, q=quarto: excluir_quarto(q))
-                        ], alignment=ft.MainAxisAlignment.END)
-                    ]),
-                    padding=10
-                )
+                        ft.Column([
+                            ft.Text(
+                                f"Quarto {quarto.numero} - {quarto.tipo}",
+                                size=18,
+                                weight=ft.FontWeight.BOLD
+                            ),
+                            ft.Text(
+                                f"R$ {quarto.preco:.2f} / diária",
+                                size=14,
+                                color=ft.colors.GREY_700
+                            )
+                        ], spacing=5)
+                    ], spacing=15),
+                    
+                    # Indicador de status
+                    ft.Container(
+                        content=ft.Row([
+                            ft.Icon(name=icone, color=cor_borda),
+                            ft.Text(status_texto, weight=ft.FontWeight.BOLD)
+                        ], spacing=5),
+                        padding=ft.padding.all(8),
+                        border_radius=ft.border_radius.all(15),
+                        bgcolor=cor_fundo
+                    )
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                padding=ft.padding.all(15),
+                border_radius=ft.border_radius.all(10),
+                border=ft.border.all(1, cor_borda),
+                margin=ft.margin.only(bottom=5),
+                ink=True,  # Efeito de clique
+                on_click=lambda e, q=quarto: mostrar_opcoes_quarto(q) if disponivel else None
             )
             
             lista_quartos.controls.append(card_quarto)
         
+        page.update()
+    
+    def mostrar_opcoes_quarto(quarto):
+        def fechar_dialogo(e):
+            dialogo.open = False
+            page.update()
+        
+        def fazer_reserva(e):
+            fechar_dialogo(e)
+            navegar_para("nova_reserva")
+        
+        # Criar o diálogo com opções para o quarto
+        dialogo = ft.AlertDialog(
+            title=ft.Text(f"Quarto {quarto.numero} - {quarto.tipo}"),
+            content=ft.Column([
+                ft.Text(f"Preço: R$ {quarto.preco:.2f} / diária"),
+                ft.Text("O que você deseja fazer com este quarto?")
+            ], tight=True, spacing=10),
+            actions=[
+                ft.ElevatedButton(
+                    "Fazer Reserva",
+                    icon=ft.icons.BOOKMARK_ADD,
+                    on_click=fazer_reserva
+                ),
+                ft.TextButton("Fechar", on_click=fechar_dialogo)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        page.dialog = dialogo
+        dialogo.open = True
         page.update()
     
     def atualizar_lista_clientes():
@@ -1042,17 +1101,99 @@ def main(page: ft.Page):
     def mostrar_tela_inicial():
         atualizar_lista_quartos()
         
-        conteudo_principal.content = ft.Column([
-            ft.Row([
-                ft.Text("Quartos Disponíveis", size=24, weight=ft.FontWeight.BOLD)
-            ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Row([
-                ft.ElevatedButton(
-                    text="Adicionar Novo Quarto",
-                    icon=ft.Icons.ADD,
-                    on_click=mostrar_dialogo_novo_quarto
+        # Botões de ação para a tela inicial
+        botoes_acao = ft.Row([
+            ft.ElevatedButton(
+                text="Fazer Nova Reserva",
+                icon=ft.icons.ADD_CIRCLE,
+                on_click=lambda e: navegar_para("nova_reserva"),
+                style=ft.ButtonStyle(
+                    bgcolor=ft.colors.BLUE_700,
+                    color=ft.colors.WHITE
                 )
-            ], alignment=ft.MainAxisAlignment.CENTER),
+            ),
+            ft.ElevatedButton(
+                text="Gerenciar Clientes",
+                icon=ft.icons.PEOPLE,
+                on_click=lambda e: navegar_para("clientes"),
+                style=ft.ButtonStyle(
+                    bgcolor=ft.colors.GREEN_700,
+                    color=ft.colors.WHITE
+                )
+            ),
+            ft.ElevatedButton(
+                text="Ver Reservas",
+                icon=ft.icons.LIST_ALT,
+                on_click=lambda e: navegar_para("reservas"),
+                style=ft.ButtonStyle(
+                    bgcolor=ft.colors.ORANGE_700,
+                    color=ft.colors.WHITE
+                )
+            )
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=20)
+        
+        # Estatísticas rápidas
+        quartos_disponiveis = len(gerenciador.listar_quartos_disponiveis())
+        total_quartos = len(gerenciador.listar_quartos())
+        reservas_ativas = len([r for r in gerenciador.listar_reservas() if r.status in ["Confirmada", "Pendente"]])
+        
+        estatisticas = ft.Row([
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("Quartos Disponíveis", size=14, color=ft.colors.GREEN),
+                    ft.Text(f"{quartos_disponiveis}/{total_quartos}", size=24, weight=ft.FontWeight.BOLD)
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=20,
+                border_radius=10,
+                bgcolor=ft.colors.GREEN_50,
+                width=200
+            ),
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("Reservas Ativas", size=14, color=ft.colors.BLUE),
+                    ft.Text(f"{reservas_ativas}", size=24, weight=ft.FontWeight.BOLD)
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=20,
+                border_radius=10,
+                bgcolor=ft.colors.BLUE_50,
+                width=200
+            )
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=20)
+        
+        # Título da página com estilo melhorado
+        titulo = ft.Container(
+            content=ft.Text(
+                "Visão Geral dos Quartos",
+                size=28,
+                weight=ft.FontWeight.BOLD,
+                color=ft.colors.WHITE
+            ),
+            padding=ft.padding.symmetric(vertical=15),
+            border_radius=ft.border_radius.only(bottom_left=10, bottom_right=10),
+            bgcolor=ft.colors.BLUE_700,
+            alignment=ft.alignment.center
+        )
+        
+        # Subtítulo com informações
+        subtitulo = ft.Container(
+            content=ft.Text(
+                "Clique em um quarto disponível para ver opções",
+                size=16,
+                italic=True,
+                color=ft.colors.GREY_700
+            ),
+            margin=ft.margin.only(bottom=10),
+            alignment=ft.alignment.center
+        )
+        
+        conteudo_principal.content = ft.Column([
+            titulo,
+            ft.Container(height=20),  # Espaçamento
+            estatisticas,
+            ft.Container(height=20),  # Espaçamento
+            botoes_acao,
+            ft.Container(height=20),  # Espaçamento
+            subtitulo,
             lista_quartos
         ], alignment=ft.MainAxisAlignment.START, expand=True)
         
