@@ -1,0 +1,1 @@
+Vou implementar o mapa gráfico dos quartos conforme solicitado, permitindo visualizar claramente o status de cada quarto (disponível, ocupado ou pendente de limpeza). Vou adicionar esta funcionalidade como uma nova tela no sistema.
