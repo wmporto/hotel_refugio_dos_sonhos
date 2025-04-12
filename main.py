@@ -1209,12 +1209,12 @@ def main(page: ft.Page):
         
         # Determinar a cor com base no status
         cores_status = {
-            "Confirmada": ft.colors.GREEN,
-            "Pendente": ft.colors.ORANGE,
-            "Concluída": ft.colors.BLUE,
-            "Cancelada": ft.colors.RED  # Não deve aparecer, mas por precaução
+            "Confirmada": ft.Colors.GREEN,
+            "Pendente": ft.Colors.ORANGE,
+            "Concluída": ft.Colors.BLUE,
+            "Cancelada": ft.Colors.RED  # Não deve aparecer, mas por precaução
         }
-        cor_fundo = cores_status.get(reserva.status, ft.colors.GREY)
+        cor_fundo = cores_status.get(reserva.status, ft.Colors.GREY)
         
         # Calcular a posição e largura do bloco
         inicio = datetime.strptime(reserva.check_in, "%d-%m-%Y")
@@ -1237,13 +1237,13 @@ def main(page: ft.Page):
                 ft.Text(
                     nome_cliente,
                     size=12,
-                    color=ft.colors.WHITE,
+                    color=ft.Colors.WHITE,
                     overflow=ft.TextOverflow.ELLIPSIS
                 ),
                 ft.Text(
                     f"{reserva.check_in} - {reserva.check_out}",
                     size=10,
-                    color=ft.colors.WHITE,
+                    color=ft.Colors.WHITE,
                     overflow=ft.TextOverflow.ELLIPSIS
                 )
             ], spacing=2, tight=True),
@@ -1319,8 +1319,8 @@ def main(page: ft.Page):
                 width=100,
                 height=40,
                 alignment=ft.alignment.center,
-                bgcolor=ft.colors.BLUE_100,
-                border=ft.border.all(1, ft.colors.BLUE_200)
+                bgcolor=ft.Colors.BLUE_100,
+                border=ft.border.all(1, ft.Colors.BLUE_200)
             )
         )
         
@@ -1328,7 +1328,7 @@ def main(page: ft.Page):
         for dia in range(1, obter_dias_do_mes(ano, mes) + 1):
             data = datetime(ano, mes, dia)
             # Destacar o dia atual
-            cor_fundo = ft.colors.BLUE_200 if data.date() == datetime.now().date() else ft.colors.BLUE_100
+            cor_fundo = ft.Colors.BLUE_200 if data.date() == datetime.now().date() else ft.Colors.BLUE_100
             
             dias_cabecalho.controls.append(
                 ft.Container(
@@ -1348,7 +1348,7 @@ def main(page: ft.Page):
                     height=40,
                     alignment=ft.alignment.center,
                     bgcolor=cor_fundo,
-                    border=ft.border.all(1, ft.colors.BLUE_200)
+                    border=ft.border.all(1, ft.Colors.BLUE_200)
                 )
             )
         
@@ -1369,8 +1369,8 @@ def main(page: ft.Page):
                     width=100,
                     height=50,
                     alignment=ft.alignment.center,
-                    bgcolor=ft.colors.GREY_100,
-                    border=ft.border.all(1, ft.colors.GREY_300)
+                    bgcolor=ft.Colors.GREY_100,
+                    border=ft.border.all(1, ft.Colors.GREY_300)
                 )
             )
             
@@ -1384,7 +1384,7 @@ def main(page: ft.Page):
                                 ft.Container(
                                     width=largura_dia,
                                     height=50,
-                                    border=ft.border.all(1, ft.colors.GREY_300),
+                                    border=ft.border.all(1, ft.Colors.GREY_300),
                                     on_click=lambda e, q=quarto.numero, d=datetime(ano, mes, dia): criar_reserva_no_calendario(q, d)
                                 )
                                 for dia in range(1, obter_dias_do_mes(ano, mes) + 1)
@@ -1423,7 +1423,7 @@ def main(page: ft.Page):
                         linhas_quartos
                     ], spacing=0, tight=True),
                     border_radius=10,
-                    border=ft.border.all(2, ft.colors.BLUE_400),
+                    border=ft.border.all(2, ft.Colors.BLUE_400),
                     clip_behavior=ft.ClipBehavior.HARD_EDGE
                 )
             ]),
