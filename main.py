@@ -323,12 +323,29 @@ class GerenciadorDeReservas:
         return False
     
     def cancelar_reserva(self, reserva_id: str) -> bool:
-        reserva = self.obter_reserva_por_id(reserva_id)
-        if reserva:
+        try:
+            print(f"--- [GERENCIADOR] Tentando cancelar reserva ID: {reserva_id[:8]} ---")
+            reserva = self.obter_reserva_por_id(reserva_id)
+            if not reserva:
+                print(f"--- [GERENCIADOR] Reserva não encontrada ID: {reserva_id[:8]} ---")
+                return False
+                
+            # Check if the reservation is already canceled or completed
+            if reserva.status in ["Cancelada", "Concluída"]:
+                print(f"--- [GERENCIADOR] Reserva já está {reserva.status} ID: {reserva_id[:8]} ---")
+                return False
+                
+            print(f"--- [GERENCIADOR] Alterando status de '{reserva.status}' para 'Cancelada' ID: {reserva_id[:8]} ---")
             reserva.status = "Cancelada"
+            print(f"--- [GERENCIADOR] Salvando dados após cancelamento ID: {reserva_id[:8]} ---")
             self._salvar_dados()
+            print(f"--- [GERENCIADOR] Reserva cancelada com sucesso ID: {reserva_id[:8]} ---")
             return True
-        return False
+        except Exception as e:
+            import traceback
+            print(f"!!! [GERENCIADOR] ERRO ao cancelar reserva: {e} !!!")
+            print(traceback.format_exc())
+            return False
     
     def listar_clientes(self) -> List[Cliente]:
         return self._clientes
@@ -365,8 +382,12 @@ class GerenciadorDeReservas:
             "reservas": [r.to_dict() for r in self._reservas]
         }
         
-        with open(self._arquivo_dados, "w") as arquivo:
-            json.dump(dados, arquivo, indent=4)
+        try:
+            with open(self._arquivo_dados, "w") as arquivo:
+                json.dump(dados, arquivo, indent=4)
+            print(f"--- [GERENCIADOR] Dados salvos com sucesso em {self._arquivo_dados} ---")
+        except Exception as e:
+            print(f"!!! [GERENCIADOR] ERRO ao salvar dados: {e} !!!")
     
     def _carregar_dados(self) -> None:
         if not os.path.exists(self._arquivo_dados):
@@ -409,7 +430,7 @@ def formatar_data(data: datetime) -> str:
 def main(page: ft.Page):
     # Configurações da página
     page.title = "Refúgio dos Sonhos - Sistema de Gerenciamento"
-    page.theme_mode = ft.ThemeMode.DARK
+    page.theme_mode = ft.ThemeMode.LIGHT
     page.window_width = 1000
     page.window_height = 800
     page.padding = 20
@@ -471,29 +492,88 @@ def main(page: ft.Page):
                 formatar_data(datetime.now() + timedelta(days=1))
             )
             
-            card_quarto = ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.ListTile(
-                            leading=ft.Icon(ft.Icons.KING_BED),
-                            title=ft.Text(f"Quarto {quarto.numero} - {quarto.tipo}"),
-                            subtitle=ft.Text(f"Preço: R$ {quarto.preco:.2f} / diária"),
-                            trailing=ft.Chip(
-                                label=ft.Text("Disponível" if disponivel else "Ocupado"),
-                                bgcolor=ft.Colors.GREEN if disponivel else ft.Colors.RED,
-                            ),
+            # Definir cores e ícones com base na disponibilidade
+            cor_fundo = ft.Colors.GREEN_50 if disponivel else ft.Colors.RED_50
+            cor_borda = ft.Colors.GREEN if disponivel else ft.Colors.RED
+            icone = ft.Icons.CHECK_CIRCLE if disponivel else ft.Icons.DO_NOT_DISTURB
+            status_texto = "Disponível" if disponivel else "Ocupado"
+            
+            # Criar um card para o quarto com visual melhorado
+            card_quarto = ft.Container(
+                content=ft.Row([
+                    # Ícone e informações do quarto
+                    ft.Row([
+                        ft.Icon(
+                            name=ft.Icons.KING_BED,
+                            size=30,
+                            color=ft.Colors.BLUE_700
                         ),
-                        ft.Row([
-                            ft.TextButton("Editar", on_click=lambda e, q=quarto: mostrar_dialogo_editar_quarto(q)),
-                            ft.TextButton("Excluir", on_click=lambda e, q=quarto: excluir_quarto(q))
-                        ], alignment=ft.MainAxisAlignment.END)
-                    ]),
-                    padding=10
-                )
+                        ft.Column([
+                            ft.Text(
+                                f"Quarto {quarto.numero} - {quarto.tipo}",
+                                size=18,
+                                weight=ft.FontWeight.BOLD
+                            ),
+                            ft.Text(
+                                f"R$ {quarto.preco:.2f} / diária",
+                                size=14,
+                                color=ft.Colors.GREY_700
+                            )
+                        ], spacing=5)
+                    ], spacing=15),
+                    
+                    # Indicador de status
+                    ft.Container(
+                        content=ft.Row([
+                            ft.Icon(name=icone, color=cor_borda),
+                            ft.Text(status_texto, weight=ft.FontWeight.BOLD)
+                        ], spacing=5),
+                        padding=ft.padding.all(8),
+                        border_radius=ft.border_radius.all(15),
+                        bgcolor=cor_fundo
+                    )
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                padding=ft.padding.all(15),
+                border_radius=ft.border_radius.all(10),
+                border=ft.border.all(1, cor_borda),
+                margin=ft.margin.only(bottom=5),
+                ink=True,  # Efeito de clique
+                on_click=lambda e, q=quarto: mostrar_opcoes_quarto(q) if disponivel else None
             )
             
             lista_quartos.controls.append(card_quarto)
         
+        page.update()
+    
+    def mostrar_opcoes_quarto(quarto):
+        def fechar_dialogo(e):
+            page.dialog = None
+            page.update()
+        
+        def fazer_reserva(e):
+            page.dialog = None
+            page.update()
+            navegar_para("nova_reserva")
+        
+        # Criar o diálogo com opções para o quarto
+        dialogo = ft.AlertDialog(
+            title=ft.Text(f"Quarto {quarto.numero} - {quarto.tipo}"),
+            content=ft.Column([
+                ft.Text(f"Preço: R$ {quarto.preco:.2f} / diária"),
+                ft.Text("O que você deseja fazer com este quarto?")
+            ], tight=True, spacing=10),
+            actions=[
+                ft.ElevatedButton(
+                    "Fazer Reserva",
+                    icon=ft.Icons.BOOKMARK_ADD,
+                    on_click=fazer_reserva
+                ),
+                ft.TextButton("Fechar", on_click=fechar_dialogo)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        page.dialog = dialogo
         page.update()
     
     def atualizar_lista_clientes():
@@ -512,8 +592,18 @@ def main(page: ft.Page):
                             ])
                         ),
                         ft.Row([
-                            ft.TextButton("Editar", on_click=lambda e, c=cliente: editar_cliente(c)),
-                            ft.TextButton("Excluir", on_click=lambda e, c=cliente: excluir_cliente(c))
+                            ft.IconButton(
+                                icon=ft.Icons.EDIT,
+                                tooltip="Editar Cliente",
+                                on_click=lambda e, c=cliente: editar_cliente(c),
+                                icon_color=ft.Colors.BLUE
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.DELETE_OUTLINE,
+                                tooltip="Excluir Cliente",
+                                on_click=lambda e, c=cliente: excluir_cliente(c),
+                                icon_color=ft.Colors.RED
+                            )
                         ], alignment=ft.MainAxisAlignment.END)
                     ]),
                     padding=10
@@ -525,6 +615,7 @@ def main(page: ft.Page):
         page.update()
     
     def atualizar_lista_reservas():
+        print("--- [UI] Atualizando lista de reservas ---")
         lista_reservas.controls.clear()
         
         for reserva in gerenciador.listar_reservas():
@@ -541,32 +632,75 @@ def main(page: ft.Page):
                 "Concluída": ft.Colors.BLUE
             }.get(reserva.status, ft.Colors.GREY)
             
-            card_reserva = ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.ListTile(
-                            leading=ft.Icon(ft.Icons.BOOKMARK),
-                            title=ft.Text(f"Reserva de {cliente.nome}"),
-                            subtitle=ft.Column([
-                                ft.Text(f"Quarto: {quarto.numero} - {quarto.tipo}"),
-                                ft.Text(f"Check-in: {reserva.check_in} | Check-out: {reserva.check_out}"),
-                                ft.Chip(
-                                    label=ft.Text(reserva.status),
-                                    bgcolor=cor_status
-                                )
-                            ])
-                        ),
-                        ft.Row([
-                            ft.TextButton("Editar", on_click=lambda e, r=reserva: editar_reserva(r)),
-                            ft.TextButton("Cancelar Reserva", on_click=lambda e, r=reserva: cancelar_reserva(r))
-                        ], alignment=ft.MainAxisAlignment.END)
-                    ]),
-                    padding=10
+            # Add a visual indicator for canceled reservations
+            opacity = 1.0
+            if reserva.status == "Cancelada":
+                opacity = 0.6  # Make canceled reservations appear faded
+            
+            # Determinar se os botões de ação devem estar habilitados
+            # (desabilitar para reservas já canceladas ou concluídas)
+            botoes_habilitados = reserva.status not in ["Cancelada", "Concluída"]
+            
+            # Criar os botões de ação com ícones
+            botoes_acao = ft.Row([
+                ft.IconButton(
+                    icon=ft.Icons.EDIT,
+                    tooltip="Editar Reserva",
+                    on_click=lambda e, r=reserva: editar_reserva(r),
+                    disabled=not botoes_habilitados,
+                    icon_color=ft.Colors.BLUE if botoes_habilitados else ft.Colors.GREY
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.DELETE_OUTLINE,
+                    tooltip="Cancelar Reserva",
+                    on_click=lambda e, r=reserva: cancelar_reserva(r),
+                    disabled=not botoes_habilitados,
+                    icon_color=ft.Colors.RED if botoes_habilitados else ft.Colors.GREY
                 )
+            ], alignment=ft.MainAxisAlignment.END, spacing=10)
+            
+            card_reserva = ft.Container(
+                content=ft.Column([
+                    ft.ListTile(
+                        leading=ft.Icon(
+                            ft.Icons.BOOKMARK,
+                            color=cor_status,
+                            size=30
+                        ),
+                        title=ft.Text(
+                            f"Reserva de {cliente.nome}",
+                            size=18,
+                            weight=ft.FontWeight.BOLD
+                        ),
+                        subtitle=ft.Column([
+                            ft.Text(f"Quarto: {quarto.numero} - {quarto.tipo}"),
+                            ft.Text(f"Check-in: {reserva.check_in} | Check-out: {reserva.check_out}"),
+                            ft.Container(
+                                content=ft.Text(
+                                    reserva.status,
+                                    color=ft.Colors.WHITE,
+                                    weight=ft.FontWeight.BOLD
+                                ),
+                                padding=ft.padding.symmetric(horizontal=10, vertical=5),
+                                border_radius=ft.border_radius.all(15),
+                                bgcolor=cor_status,
+                                margin=ft.margin.only(top=5)
+                            )
+                        ])
+                    ),
+                    # Substituir os botões anteriores pelos novos botões de ícone
+                    botoes_acao
+                ]),
+                padding=15,
+                border_radius=10,
+                border=ft.border.all(1, cor_status),
+                margin=ft.margin.only(bottom=10),
+                opacity=opacity
             )
             
             lista_reservas.controls.append(card_reserva)
         
+        print(f"--- [UI] Lista de reservas atualizada com {len(lista_reservas.controls)} itens ---")
         page.update()
     
     def atualizar_dropdown_clientes():
@@ -623,7 +757,7 @@ def main(page: ft.Page):
         campo_preco = ft.TextField(label="Preço por Diária", keyboard_type=ft.KeyboardType.NUMBER)
         
         def fechar_dialogo(e):
-            dialogo.open = False
+            page.dialog = None
             page.update()
         
         def salvar_quarto(e):
@@ -642,7 +776,8 @@ def main(page: ft.Page):
                 
                 mostrar_snackbar("Quarto adicionado com sucesso!")
                 atualizar_lista_quartos()
-                fechar_dialogo(e)
+                page.dialog = None
+                page.update()
             except ValueError:
                 mostrar_snackbar("Por favor, preencha todos os campos corretamente!")
         
@@ -662,7 +797,6 @@ def main(page: ft.Page):
         )
         
         page.dialog = dialogo
-        dialogo.open = True
         page.update()
     
     def mostrar_dialogo_editar_quarto(quarto):
@@ -681,7 +815,7 @@ def main(page: ft.Page):
         switch_disponivel = ft.Switch(label="Disponível", value=quarto.disponivel)
         
         def fechar_dialogo(e):
-            dialogo.open = False
+            page.dialog = None
             page.update()
         
         def salvar_quarto(e):
@@ -694,7 +828,8 @@ def main(page: ft.Page):
                 
                 mostrar_snackbar("Quarto atualizado com sucesso!")
                 atualizar_lista_quartos()
-                fechar_dialogo(e)
+                page.dialog = None
+                page.update()
             except ValueError:
                 mostrar_snackbar("Por favor, preencha todos os campos corretamente!")
         
@@ -715,7 +850,6 @@ def main(page: ft.Page):
         )
         
         page.dialog = dialogo
-        dialogo.open = True
         page.update()
     
     def excluir_quarto(quarto):
@@ -723,10 +857,11 @@ def main(page: ft.Page):
             gerenciador.remover_quarto(quarto.numero)
             mostrar_snackbar("Quarto excluído com sucesso!")
             atualizar_lista_quartos()
-            fechar_dialogo(e)
+            page.dialog = None
+            page.update()
         
         def fechar_dialogo(e):
-            dialogo.open = False
+            page.dialog = None
             page.update()
         
         # Criar o diálogo de confirmação
@@ -741,7 +876,6 @@ def main(page: ft.Page):
         )
         
         page.dialog = dialogo
-        dialogo.open = True
         page.update()
     
     # Funções para manipular clientes
@@ -773,7 +907,7 @@ def main(page: ft.Page):
         navegar_para("clientes")
     
     def editar_cliente(cliente):
-        cliente_selecionado.current =  cliente
+        cliente_selecionado.current = cliente
         campo_nome.value = cliente.nome
         campo_telefone.value = cliente.telefone
         campo_email.value = cliente.email
@@ -785,10 +919,11 @@ def main(page: ft.Page):
             gerenciador.remover_cliente(cliente.id)
             mostrar_snackbar("Cliente excluído com sucesso!")
             atualizar_lista_clientes()
-            fechar_dialogo(e)
+            page.dialog = None
+            page.update()
         
         def fechar_dialogo(e):
-            dialogo.open = False
+            page.dialog = None
             page.update()
         
         # Criar o diálogo de confirmação
@@ -803,7 +938,6 @@ def main(page: ft.Page):
         )
         
         page.dialog = dialogo
-        dialogo.open = True
         page.update()
     
     # Funções para manipular reservas
@@ -937,7 +1071,7 @@ def main(page: ft.Page):
         )
         
         def fechar_dialogo(e):
-            dialogo.open = False
+            page.dialog = None
             page.update()
         
         def salvar_reserva_edit(e):
@@ -954,7 +1088,8 @@ def main(page: ft.Page):
             
             mostrar_snackbar("Reserva atualizada com sucesso!")
             atualizar_lista_reservas()
-            fechar_dialogo(e)
+            page.dialog = None
+            page.update()
         
         # Criar o diálogo
         dialogo = ft.AlertDialog(
@@ -992,36 +1127,78 @@ def main(page: ft.Page):
         )
         
         page.dialog = dialogo
-        dialogo.open = True
         page.update()
     
     def cancelar_reserva(reserva):
-        def confirmar_cancelamento(e):
-            if gerenciador.cancelar_reserva(reserva.id):
-                mostrar_snackbar("Reserva cancelada com sucesso!")
-                atualizar_lista_reservas()
-                fechar_dialogo(e)
-            else:
-                mostrar_snackbar("Erro ao cancelar a reserva!")
+        # --- DEBUG: Verifica se esta função é chamada ---
+        print(f"--- [UI] Função cancelar_reserva chamada para ID: {reserva.id[:8]} ---")
         
-        def fechar_dialogo(e):
-            dialogo.open = False
-            page.update()
+        # Implementação simplificada e direta para evitar problemas com escopo de variáveis
+        # e garantir que o diálogo seja exibido corretamente
         
-        # Criar o diálogo de confirmação
+        # Criar o diálogo de confirmação fora das funções internas
         dialogo = ft.AlertDialog(
+            modal=True,
             title=ft.Text("Confirmar Cancelamento"),
-            content=ft.Text("Tem certeza que deseja cancelar esta reserva?"),
-            actions=[
-                ft.TextButton("Não", on_click=fechar_dialogo),
-                ft.TextButton("Sim, Cancelar", on_click=confirmar_cancelamento)
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
+            content=ft.Column([
+                ft.Icon(
+                    name=ft.Icons.WARNING_AMBER_ROUNDED,
+                    color=ft.Colors.AMBER,
+                    size=50
+                ),
+                ft.Text(
+                    "Tem certeza que deseja cancelar esta reserva?",
+                    text_align=ft.TextAlign.CENTER
+                ),
+                ft.Text(
+                    "Esta ação não pode ser desfeita.",
+                    size=12,
+                    color=ft.Colors.GREY,
+                    text_align=ft.TextAlign.CENTER
+                )
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10)
         )
         
+        # Definir as funções de callback
+        def confirmar_cancelamento(e):
+            print(f"--- [UI] Confirmando cancelamento para ID: {reserva.id[:8]} ---")
+            resultado = gerenciador.cancelar_reserva(reserva.id)
+            print(f"--- [UI] Resultado do cancelamento: {resultado} ---")
+            
+            if resultado:
+                mostrar_snackbar("Reserva cancelada com sucesso!")
+            else:
+                mostrar_snackbar(f"Erro ao cancelar a reserva (ID: {reserva.id[:8]})")
+            
+            # Fechar o diálogo e atualizar a lista
+            page.dialog = None  # Limpar o diálogo atual
+            page.update()
+            atualizar_lista_reservas()  # Atualizar a lista após o fechamento do diálogo
+        
+        def fechar_dialogo(e):
+            print(f"--- [UI] Fechando diálogo para ID: {reserva.id[:8]} ---")
+            page.dialog = None  # Limpar o diálogo atual
+            page.update()
+        
+        # Adicionar os botões ao diálogo
+        dialogo.actions = [
+            ft.TextButton("Não", on_click=fechar_dialogo),
+            ft.ElevatedButton(
+                "Sim, Cancelar",
+                on_click=confirmar_cancelamento,
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.RED,
+                    color=ft.Colors.WHITE
+                )
+            )
+        ]
+        dialogo.actions_alignment = ft.MainAxisAlignment.END
+        
+        # Exibir o diálogo
+        print(f"--- [UI] Tentando exibir diálogo para ID: {reserva.id[:8]} ---")
         page.dialog = dialogo
-        dialogo.open = True
         page.update()
+        print(f"--- [UI] page.update() chamado para exibir diálogo ---")
     
     # Funções de navegação
     def navegar_para(tela):
@@ -1042,17 +1219,99 @@ def main(page: ft.Page):
     def mostrar_tela_inicial():
         atualizar_lista_quartos()
         
-        conteudo_principal.content = ft.Column([
-            ft.Row([
-                ft.Text("Quartos Disponíveis", size=24, weight=ft.FontWeight.BOLD)
-            ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Row([
-                ft.ElevatedButton(
-                    text="Adicionar Novo Quarto",
-                    icon=ft.Icons.ADD,
-                    on_click=mostrar_dialogo_novo_quarto
+        # Botões de ação para a tela inicial
+        botoes_acao = ft.Row([
+            ft.ElevatedButton(
+                text="Fazer Nova Reserva",
+                icon=ft.Icons.ADD_CIRCLE,
+                on_click=lambda e: navegar_para("nova_reserva"),
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.BLUE_700,
+                    color=ft.Colors.WHITE
                 )
-            ], alignment=ft.MainAxisAlignment.CENTER),
+            ),
+            ft.ElevatedButton(
+                text="Gerenciar Clientes",
+                icon=ft.Icons.PEOPLE,
+                on_click=lambda e: navegar_para("clientes"),
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.GREEN_700,
+                    color=ft.Colors.WHITE
+                )
+            ),
+            ft.ElevatedButton(
+                text="Ver Reservas",
+                icon=ft.Icons.LIST_ALT,
+                on_click=lambda e: navegar_para("reservas"),
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.ORANGE_700,
+                    color=ft.Colors.WHITE
+                )
+            )
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=20)
+        
+        # Estatísticas rápidas
+        quartos_disponiveis = len(gerenciador.listar_quartos_disponiveis())
+        total_quartos = len(gerenciador.listar_quartos())
+        reservas_ativas = len([r for r in gerenciador.listar_reservas() if r.status in ["Confirmada", "Pendente"]])
+        
+        estatisticas = ft.Row([
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("Quartos Disponíveis", size=14, color=ft.Colors.GREEN),
+                    ft.Text(f"{quartos_disponiveis}/{total_quartos}", size=24, weight=ft.FontWeight.BOLD)
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=20,
+                border_radius=10,
+                bgcolor=ft.Colors.GREEN_50,
+                width=200
+            ),
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("Reservas Ativas", size=14, color=ft.Colors.BLUE),
+                    ft.Text(f"{reservas_ativas}", size=24, weight=ft.FontWeight.BOLD)
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=20,
+                border_radius=10,
+                bgcolor=ft.Colors.BLUE_50,
+                width=200
+            )
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=20)
+        
+        # Título da página com estilo melhorado
+        titulo = ft.Container(
+            content=ft.Text(
+                "Visão Geral dos Quartos",
+                size=28,
+                weight=ft.FontWeight.BOLD,
+                color=ft.Colors.WHITE
+            ),
+            padding=ft.padding.symmetric(vertical=15),
+            border_radius=ft.border_radius.only(bottom_left=10, bottom_right=10),
+            bgcolor=ft.Colors.BLUE_700,
+            alignment=ft.alignment.center
+        )
+        
+        # Subtítulo com informações
+        subtitulo = ft.Container(
+            content=ft.Text(
+                "Clique em um quarto disponível para ver opções",
+                size=16,
+                italic=True,
+                color=ft.Colors.GREY_700
+            ),
+            margin=ft.margin.only(bottom=10),
+            alignment=ft.alignment.center
+        )
+        
+        conteudo_principal.content = ft.Column([
+            titulo,
+            ft.Container(height=20),  # Espaçamento
+            estatisticas,
+            ft.Container(height=20),  # Espaçamento
+            botoes_acao,
+            ft.Container(height=20),  # Espaçamento
+            subtitulo,
             lista_quartos
         ], alignment=ft.MainAxisAlignment.START, expand=True)
         
@@ -1138,7 +1397,11 @@ def main(page: ft.Page):
         botao_salvar = ft.ElevatedButton(
             text="Fazer Reserva",
             icon=ft.Icons.BOOKMARK_ADD,
-            on_click=salvar_reserva
+            on_click=salvar_reserva,
+            style=ft.ButtonStyle(
+                bgcolor=ft.Colors.BLUE_700,
+                color=ft.Colors.WHITE
+            )
         )
         
         botao_cancelar = ft.OutlinedButton(
@@ -1146,16 +1409,20 @@ def main(page: ft.Page):
             on_click=lambda e: navegar_para("reservas")
         )
         
-        conteudo_principal.content = ft.Column([
-            ft.Row([
-                ft.Text("Nova Reserva", size=24, weight=ft.FontWeight.BOLD)
-            ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Container(
-                content=ft.Column([
-                    dropdown_clientes,
-                    ft.Row([
+        # Formulário centralizado e com visual melhorado
+        formulario = ft.Container(
+            content=ft.Column([
+                ft.Text(
+                    "Informações da Reserva",
+                    size=18,
+                    weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.BLUE_700
+                ),
+                dropdown_clientes,
+                ft.Container(
+                    content=ft.Row([
                         ft.Column([
-                            ft.Text("Check-in:"),
+                            ft.Text("Check-in:", weight=ft.FontWeight.BOLD),
                             texto_check_in,
                             ft.ElevatedButton(
                                 "Selecionar Data",
@@ -1164,7 +1431,7 @@ def main(page: ft.Page):
                             )
                         ]),
                         ft.Column([
-                            ft.Text("Check-out:"),
+                            ft.Text("Check-out:", weight=ft.FontWeight.BOLD),
                             texto_check_out,
                             ft.ElevatedButton(
                                 "Selecionar Data",
@@ -1172,35 +1439,86 @@ def main(page: ft.Page):
                                 on_click=selecionar_data_check_out
                             )
                         ])
-                    ]),
-                    ft.Text("Quartos disponíveis para o período selecionado:", weight=ft.FontWeight.BOLD),
-                    dropdown_quartos,
-                    ft.Row([
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    margin=ft.margin.symmetric(vertical=10)
+                ),
+                ft.Text(
+                    "Quartos disponíveis para o período selecionado:",
+                    weight=ft.FontWeight.BOLD
+                ),
+                dropdown_quartos,
+                ft.Container(
+                    content=ft.Row([
                         botao_cancelar,
                         botao_salvar
-                    ], alignment=ft.MainAxisAlignment.END)
-                ], spacing=20),
-                padding=20,
-                width=500
+                    ], alignment=ft.MainAxisAlignment.END),
+                    margin=ft.margin.only(top=20)
+                )
+            ], spacing=15),
+            padding=30,
+            border_radius=10,
+            border=ft.border.all(1, ft.Colors.BLUE_200),
+            bgcolor=ft.Colors.WHITE,
+            width=550,
+            shadow=ft.BoxShadow(
+                spread_radius=1,
+                blur_radius=15,
+                color=ft.Colors.with_opacity(0.2, ft.Colors.BLUE_GREY)
             )
-        ], alignment=ft.MainAxisAlignment.CENTER, expand=True)
+        )
+        
+        conteudo_principal.content = ft.Column([
+            ft.Container(
+                content=ft.Text(
+                    "Nova Reserva",
+                    size=28,
+                    weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.WHITE
+                ),
+                padding=ft.padding.symmetric(vertical=15),
+                border_radius=ft.border_radius.only(bottom_left=10, bottom_right=10),
+                bgcolor=ft.Colors.BLUE_700,
+                alignment=ft.alignment.center,
+                margin=ft.margin.only(bottom=30)
+            ),
+            formulario
+        ], alignment=ft.MainAxisAlignment.START, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True)
         
         page.update()
     
     def mostrar_tela_reservas():
         atualizar_lista_reservas()
         
+        # Título da página com estilo melhorado
+        titulo = ft.Container(
+            content=ft.Text(
+                "Gerenciamento de Reservas",
+                size=28,
+                weight=ft.FontWeight.BOLD,
+                color=ft.Colors.WHITE
+            ),
+            padding=ft.padding.symmetric(vertical=15),
+            border_radius=ft.border_radius.only(bottom_left=10, bottom_right=10),
+            bgcolor=ft.Colors.BLUE_700,
+            alignment=ft.alignment.center,
+            margin=ft.margin.only(bottom=20)
+        )
+        
+        # Botão para nova reserva
+        botao_nova_reserva = ft.ElevatedButton(
+            text="Nova Reserva",
+            icon=ft.Icons.ADD,
+            on_click=lambda e: navegar_para("nova_reserva"),
+            style=ft.ButtonStyle(
+                bgcolor=ft.Colors.GREEN_700,
+                color=ft.Colors.WHITE
+            )
+        )
+        
         conteudo_principal.content = ft.Column([
-            ft.Row([
-                ft.Text("Gerenciamento de Reservas", size=24, weight=ft.FontWeight.BOLD)
-            ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Row([
-                ft.ElevatedButton(
-                    text="Nova Reserva",
-                    icon=ft.Icons.ADD,
-                    on_click=lambda e: navegar_para("nova_reserva")
-                )
-            ], alignment=ft.MainAxisAlignment.CENTER),
+            titulo,
+            ft.Row([botao_nova_reserva], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Container(height=20),  # Espaçamento
             lista_reservas
         ], alignment=ft.MainAxisAlignment.START, expand=True)
         
