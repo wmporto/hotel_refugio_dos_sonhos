@@ -472,8 +472,8 @@ def main(page: ft.Page):
             )
             
             # Definir cores e ícones com base na disponibilidade
-            cor_fundo = ft.colors.GREEN_50 if disponivel else ft.colors.RED_50
-            cor_borda = ft.colors.GREEN if disponivel else ft.colors.RED
+            cor_fundo = ft.Colors.GREEN_50 if disponivel else ft.Colors.RED_50
+            cor_borda = ft.Colors.GREEN if disponivel else ft.Colors.RED
             icone = ft.icons.CHECK_CIRCLE if disponivel else ft.icons.DO_NOT_DISTURB
             status_texto = "Disponível" if disponivel else "Ocupado"
             
@@ -485,7 +485,7 @@ def main(page: ft.Page):
                         ft.Icon(
                             name=ft.icons.KING_BED,
                             size=30,
-                            color=ft.colors.BLUE_700
+                            color=ft.Colors.BLUE_700
                         ),
                         ft.Column([
                             ft.Text(
@@ -496,7 +496,7 @@ def main(page: ft.Page):
                             ft.Text(
                                 f"R$ {quarto.preco:.2f} / diária",
                                 size=14,
-                                color=ft.colors.GREY_700
+                                color=ft.Colors.GREY_700
                             )
                         ], spacing=5)
                     ], spacing=15),
@@ -600,28 +600,62 @@ def main(page: ft.Page):
                 "Concluída": ft.Colors.BLUE
             }.get(reserva.status, ft.Colors.GREY)
             
-            card_reserva = ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.ListTile(
-                            leading=ft.Icon(ft.Icons.BOOKMARK),
-                            title=ft.Text(f"Reserva de {cliente.nome}"),
-                            subtitle=ft.Column([
-                                ft.Text(f"Quarto: {quarto.numero} - {quarto.tipo}"),
-                                ft.Text(f"Check-in: {reserva.check_in} | Check-out: {reserva.check_out}"),
-                                ft.Chip(
-                                    label=ft.Text(reserva.status),
-                                    bgcolor=cor_status
-                                )
-                            ])
+            # Determinar se os botões de ação devem estar habilitados
+            # (desabilitar para reservas já canceladas ou concluídas)
+            botoes_habilitados = reserva.status not in ["Cancelada", "Concluída"]
+            
+            card_reserva = ft.Container(
+                content=ft.Column([
+                    ft.ListTile(
+                        leading=ft.Icon(
+                            ft.icons.BOOKMARK,
+                            color=cor_status,
+                            size=30
                         ),
-                        ft.Row([
-                            ft.TextButton("Editar", on_click=lambda e, r=reserva: editar_reserva(r)),
-                            ft.TextButton("Cancelar Reserva", on_click=lambda e, r=reserva: cancelar_reserva(r))
-                        ], alignment=ft.MainAxisAlignment.END)
-                    ]),
-                    padding=10
-                )
+                        title=ft.Text(
+                            f"Reserva de {cliente.nome}",
+                            size=18,
+                            weight=ft.FontWeight.BOLD
+                        ),
+                        subtitle=ft.Column([
+                            ft.Text(f"Quarto: {quarto.numero} - {quarto.tipo}"),
+                            ft.Text(f"Check-in: {reserva.check_in} | Check-out: {reserva.check_out}"),
+                            ft.Container(
+                                content=ft.Text(
+                                    reserva.status,
+                                    color=ft.Colors.WHITE,
+                                    weight=ft.FontWeight.BOLD
+                                ),
+                                padding=ft.padding.symmetric(horizontal=10, vertical=5),
+                                border_radius=ft.border_radius.all(15),
+                                bgcolor=cor_status,
+                                margin=ft.margin.only(top=5)
+                            )
+                        ])
+                    ),
+                    ft.Row([
+                        ft.ElevatedButton(
+                            "Editar",
+                            icon=ft.icons.EDIT,
+                            on_click=lambda e, r=reserva: editar_reserva(r),
+                            disabled=not botoes_habilitados
+                        ),
+                        ft.ElevatedButton(
+                            "Cancelar Reserva",
+                            icon=ft.icons.CANCEL,
+                            on_click=lambda e, r=reserva: cancelar_reserva(r),
+                            style=ft.ButtonStyle(
+                                bgcolor=ft.Colors.RED if botoes_habilitados else ft.Colors.GREY,
+                                color=ft.Colors.WHITE
+                            ),
+                            disabled=not botoes_habilitados
+                        )
+                    ], alignment=ft.MainAxisAlignment.END, spacing=10)
+                ]),
+                padding=15,
+                border_radius=10,
+                border=ft.border.all(1, cor_status),
+                margin=ft.margin.only(bottom=10)
             )
             
             lista_reservas.controls.append(card_reserva)
@@ -1056,8 +1090,10 @@ def main(page: ft.Page):
     
     def cancelar_reserva(reserva):
         def confirmar_cancelamento(e):
+            # Corrigido: Garantir que o cancelamento seja processado e salvo
             if gerenciador.cancelar_reserva(reserva.id):
                 mostrar_snackbar("Reserva cancelada com sucesso!")
+                # Atualizar a lista de reservas imediatamente após o cancelamento
                 atualizar_lista_reservas()
                 fechar_dialogo(e)
             else:
@@ -1067,13 +1103,39 @@ def main(page: ft.Page):
             dialogo.open = False
             page.update()
         
-        # Criar o diálogo de confirmação
+        # Criar o diálogo de confirmação com visual melhorado
         dialogo = ft.AlertDialog(
             title=ft.Text("Confirmar Cancelamento"),
-            content=ft.Text("Tem certeza que deseja cancelar esta reserva?"),
+            content=ft.Column([
+                ft.Icon(
+                    name=ft.icons.WARNING_AMBER_ROUNDED,
+                    color=ft.Colors.AMBER,
+                    size=50
+                ),
+                ft.Text(
+                    "Tem certeza que deseja cancelar esta reserva?",
+                    text_align=ft.TextAlign.CENTER
+                ),
+                ft.Text(
+                    "Esta ação não pode ser desfeita.",
+                    size=12,
+                    color=ft.Colors.GREY,
+                    text_align=ft.TextAlign.CENTER
+                )
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
             actions=[
-                ft.TextButton("Não", on_click=fechar_dialogo),
-                ft.TextButton("Sim, Cancelar", on_click=confirmar_cancelamento)
+                ft.TextButton(
+                    "Não",
+                    on_click=fechar_dialogo
+                ),
+                ft.ElevatedButton(
+                    "Sim, Cancelar",
+                    on_click=confirmar_cancelamento,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.RED,
+                        color=ft.Colors.WHITE
+                    )
+                )
             ],
             actions_alignment=ft.MainAxisAlignment.END
         )
@@ -1108,8 +1170,8 @@ def main(page: ft.Page):
                 icon=ft.icons.ADD_CIRCLE,
                 on_click=lambda e: navegar_para("nova_reserva"),
                 style=ft.ButtonStyle(
-                    bgcolor=ft.colors.BLUE_700,
-                    color=ft.colors.WHITE
+                    bgcolor=ft.Colors.BLUE_700,
+                    color=ft.Colors.WHITE
                 )
             ),
             ft.ElevatedButton(
@@ -1117,8 +1179,8 @@ def main(page: ft.Page):
                 icon=ft.icons.PEOPLE,
                 on_click=lambda e: navegar_para("clientes"),
                 style=ft.ButtonStyle(
-                    bgcolor=ft.colors.GREEN_700,
-                    color=ft.colors.WHITE
+                    bgcolor=ft.Colors.GREEN_700,
+                    color=ft.Colors.WHITE
                 )
             ),
             ft.ElevatedButton(
@@ -1126,8 +1188,8 @@ def main(page: ft.Page):
                 icon=ft.icons.LIST_ALT,
                 on_click=lambda e: navegar_para("reservas"),
                 style=ft.ButtonStyle(
-                    bgcolor=ft.colors.ORANGE_700,
-                    color=ft.colors.WHITE
+                    bgcolor=ft.Colors.ORANGE_700,
+                    color=ft.Colors.WHITE
                 )
             )
         ], alignment=ft.MainAxisAlignment.CENTER, spacing=20)
@@ -1140,22 +1202,22 @@ def main(page: ft.Page):
         estatisticas = ft.Row([
             ft.Container(
                 content=ft.Column([
-                    ft.Text("Quartos Disponíveis", size=14, color=ft.colors.GREEN),
+                    ft.Text("Quartos Disponíveis", size=14, color=ft.Colors.GREEN),
                     ft.Text(f"{quartos_disponiveis}/{total_quartos}", size=24, weight=ft.FontWeight.BOLD)
                 ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                 padding=20,
                 border_radius=10,
-                bgcolor=ft.colors.GREEN_50,
+                bgcolor=ft.Colors.GREEN_50,
                 width=200
             ),
             ft.Container(
                 content=ft.Column([
-                    ft.Text("Reservas Ativas", size=14, color=ft.colors.BLUE),
+                    ft.Text("Reservas Ativas", size=14, color=ft.Colors.BLUE),
                     ft.Text(f"{reservas_ativas}", size=24, weight=ft.FontWeight.BOLD)
                 ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                 padding=20,
                 border_radius=10,
-                bgcolor=ft.colors.BLUE_50,
+                bgcolor=ft.Colors.BLUE_50,
                 width=200
             )
         ], alignment=ft.MainAxisAlignment.CENTER, spacing=20)
@@ -1166,11 +1228,11 @@ def main(page: ft.Page):
                 "Visão Geral dos Quartos",
                 size=28,
                 weight=ft.FontWeight.BOLD,
-                color=ft.colors.WHITE
+                color=ft.Colors.WHITE
             ),
             padding=ft.padding.symmetric(vertical=15),
             border_radius=ft.border_radius.only(bottom_left=10, bottom_right=10),
-            bgcolor=ft.colors.BLUE_700,
+            bgcolor=ft.Colors.BLUE_700,
             alignment=ft.alignment.center
         )
         
@@ -1180,7 +1242,7 @@ def main(page: ft.Page):
                 "Clique em um quarto disponível para ver opções",
                 size=16,
                 italic=True,
-                color=ft.colors.GREY_700
+                color=ft.Colors.GREY_700
             ),
             margin=ft.margin.only(bottom=10),
             alignment=ft.alignment.center
@@ -1279,7 +1341,11 @@ def main(page: ft.Page):
         botao_salvar = ft.ElevatedButton(
             text="Fazer Reserva",
             icon=ft.Icons.BOOKMARK_ADD,
-            on_click=salvar_reserva
+            on_click=salvar_reserva,
+            style=ft.ButtonStyle(
+                bgcolor=ft.Colors.BLUE_700,
+                color=ft.Colors.WHITE
+            )
         )
         
         botao_cancelar = ft.OutlinedButton(
@@ -1287,16 +1353,20 @@ def main(page: ft.Page):
             on_click=lambda e: navegar_para("reservas")
         )
         
-        conteudo_principal.content = ft.Column([
-            ft.Row([
-                ft.Text("Nova Reserva", size=24, weight=ft.FontWeight.BOLD)
-            ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Container(
-                content=ft.Column([
-                    dropdown_clientes,
-                    ft.Row([
+        # Formulário centralizado e com visual melhorado
+        formulario = ft.Container(
+            content=ft.Column([
+                ft.Text(
+                    "Informações da Reserva",
+                    size=18,
+                    weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.BLUE_700
+                ),
+                dropdown_clientes,
+                ft.Container(
+                    content=ft.Row([
                         ft.Column([
-                            ft.Text("Check-in:"),
+                            ft.Text("Check-in:", weight=ft.FontWeight.BOLD),
                             texto_check_in,
                             ft.ElevatedButton(
                                 "Selecionar Data",
@@ -1305,7 +1375,7 @@ def main(page: ft.Page):
                             )
                         ]),
                         ft.Column([
-                            ft.Text("Check-out:"),
+                            ft.Text("Check-out:", weight=ft.FontWeight.BOLD),
                             texto_check_out,
                             ft.ElevatedButton(
                                 "Selecionar Data",
@@ -1313,35 +1383,86 @@ def main(page: ft.Page):
                                 on_click=selecionar_data_check_out
                             )
                         ])
-                    ]),
-                    ft.Text("Quartos disponíveis para o período selecionado:", weight=ft.FontWeight.BOLD),
-                    dropdown_quartos,
-                    ft.Row([
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    margin=ft.margin.symmetric(vertical=10)
+                ),
+                ft.Text(
+                    "Quartos disponíveis para o período selecionado:",
+                    weight=ft.FontWeight.BOLD
+                ),
+                dropdown_quartos,
+                ft.Container(
+                    content=ft.Row([
                         botao_cancelar,
                         botao_salvar
-                    ], alignment=ft.MainAxisAlignment.END)
-                ], spacing=20),
-                padding=20,
-                width=500
+                    ], alignment=ft.MainAxisAlignment.END),
+                    margin=ft.margin.only(top=20)
+                )
+            ], spacing=15),
+            padding=30,
+            border_radius=10,
+            border=ft.border.all(1, ft.Colors.BLUE_200),
+            bgcolor=ft.Colors.WHITE,
+            width=550,
+            shadow=ft.BoxShadow(
+                spread_radius=1,
+                blur_radius=15,
+                color=ft.Colors.with_opacity(0.2, ft.Colors.BLUE_GREY)
             )
-        ], alignment=ft.MainAxisAlignment.CENTER, expand=True)
+        )
+        
+        conteudo_principal.content = ft.Column([
+            ft.Container(
+                content=ft.Text(
+                    "Nova Reserva",
+                    size=28,
+                    weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.WHITE
+                ),
+                padding=ft.padding.symmetric(vertical=15),
+                border_radius=ft.border_radius.only(bottom_left=10, bottom_right=10),
+                bgcolor=ft.Colors.BLUE_700,
+                alignment=ft.alignment.center,
+                margin=ft.margin.only(bottom=30)
+            ),
+            formulario
+        ], alignment=ft.MainAxisAlignment.START, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True)
         
         page.update()
     
     def mostrar_tela_reservas():
         atualizar_lista_reservas()
         
+        # Título da página com estilo melhorado
+        titulo = ft.Container(
+            content=ft.Text(
+                "Gerenciamento de Reservas",
+                size=28,
+                weight=ft.FontWeight.BOLD,
+                color=ft.Colors.WHITE
+            ),
+            padding=ft.padding.symmetric(vertical=15),
+            border_radius=ft.border_radius.only(bottom_left=10, bottom_right=10),
+            bgcolor=ft.Colors.BLUE_700,
+            alignment=ft.alignment.center,
+            margin=ft.margin.only(bottom=20)
+        )
+        
+        # Botão para nova reserva
+        botao_nova_reserva = ft.ElevatedButton(
+            text="Nova Reserva",
+            icon=ft.icons.ADD,
+            on_click=lambda e: navegar_para("nova_reserva"),
+            style=ft.ButtonStyle(
+                bgcolor=ft.Colors.GREEN_700,
+                color=ft.Colors.WHITE
+            )
+        )
+        
         conteudo_principal.content = ft.Column([
-            ft.Row([
-                ft.Text("Gerenciamento de Reservas", size=24, weight=ft.FontWeight.BOLD)
-            ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Row([
-                ft.ElevatedButton(
-                    text="Nova Reserva",
-                    icon=ft.Icons.ADD,
-                    on_click=lambda e: navegar_para("nova_reserva")
-                )
-            ], alignment=ft.MainAxisAlignment.CENTER),
+            titulo,
+            ft.Row([botao_nova_reserva], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Container(height=20),  # Espaçamento
             lista_reservas
         ], alignment=ft.MainAxisAlignment.START, expand=True)
         
