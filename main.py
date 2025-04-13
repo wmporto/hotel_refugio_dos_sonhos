@@ -9,7 +9,6 @@ import traceback # Import traceback for detailed error logging
 
 # ==============================================================================
 # Classes do modelo de dados
-# (Idealmente em arquivos separados na pasta models)
 # ==============================================================================
 class Cliente:
     # ... (código da classe Cliente sem alterações) ...
