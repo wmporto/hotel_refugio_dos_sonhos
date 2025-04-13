@@ -324,19 +324,27 @@ class GerenciadorDeReservas:
     
     def cancelar_reserva(self, reserva_id: str) -> bool:
         try:
+            print(f"--- [GERENCIADOR] Tentando cancelar reserva ID: {reserva_id[:8]} ---")
             reserva = self.obter_reserva_por_id(reserva_id)
             if not reserva:
+                print(f"--- [GERENCIADOR] Reserva não encontrada ID: {reserva_id[:8]} ---")
                 return False
                 
             # Check if the reservation is already canceled or completed
             if reserva.status in ["Cancelada", "Concluída"]:
+                print(f"--- [GERENCIADOR] Reserva já está {reserva.status} ID: {reserva_id[:8]} ---")
                 return False
                 
+            print(f"--- [GERENCIADOR] Alterando status de '{reserva.status}' para 'Cancelada' ID: {reserva_id[:8]} ---")
             reserva.status = "Cancelada"
+            print(f"--- [GERENCIADOR] Salvando dados após cancelamento ID: {reserva_id[:8]} ---")
             self._salvar_dados()
+            print(f"--- [GERENCIADOR] Reserva cancelada com sucesso ID: {reserva_id[:8]} ---")
             return True
         except Exception as e:
-            print(f"Erro ao cancelar reserva: {e}")
+            import traceback
+            print(f"!!! [GERENCIADOR] ERRO ao cancelar reserva: {e} !!!")
+            print(traceback.format_exc())
             return False
     
     def listar_clientes(self) -> List[Cliente]:
@@ -374,8 +382,12 @@ class GerenciadorDeReservas:
             "reservas": [r.to_dict() for r in self._reservas]
         }
         
-        with open(self._arquivo_dados, "w") as arquivo:
-            json.dump(dados, arquivo, indent=4)
+        try:
+            with open(self._arquivo_dados, "w") as arquivo:
+                json.dump(dados, arquivo, indent=4)
+            print(f"--- [GERENCIADOR] Dados salvos com sucesso em {self._arquivo_dados} ---")
+        except Exception as e:
+            print(f"!!! [GERENCIADOR] ERRO ao salvar dados: {e} !!!")
     
     def _carregar_dados(self) -> None:
         if not os.path.exists(self._arquivo_dados):
@@ -593,6 +605,7 @@ def main(page: ft.Page):
         page.update()
     
     def atualizar_lista_reservas():
+        print("--- [UI] Atualizando lista de reservas ---")
         lista_reservas.controls.clear()
         
         for reserva in gerenciador.listar_reservas():
@@ -675,6 +688,7 @@ def main(page: ft.Page):
             
             lista_reservas.controls.append(card_reserva)
         
+        print(f"--- [UI] Lista de reservas atualizada com {len(lista_reservas.controls)} itens ---")
         page.update()
     
     def atualizar_dropdown_clientes():
@@ -1104,65 +1118,98 @@ def main(page: ft.Page):
         page.update()
     
     def cancelar_reserva(reserva):
-        def confirmar_cancelamento(e):
-            # Process the cancellation immediately
-            resultado = gerenciador.cancelar_reserva(reserva.id)
-        
-            if resultado:
-                mostrar_snackbar("Reserva cancelada com sucesso!")
-                # Close dialog and update the reservations list
-                dialogo.open = False
-                atualizar_lista_reservas()
-                page.update()
-            else:
-                mostrar_snackbar("Erro ao cancelar a reserva!")
-                dialogo.open = False
-                page.update()
-    
-        def fechar_dialogo(e):
-            dialogo.open = False
-            page.update()
-    
-        # Criar o diálogo de confirmação com visual melhorado
-        dialogo = ft.AlertDialog(
-            title=ft.Text("Confirmar Cancelamento"),
-            content=ft.Column([
-                ft.Icon(
-                    name=ft.Icons.WARNING_AMBER_ROUNDED,
-                    color=ft.Colors.AMBER,
-                    size=50
-                ),
-                ft.Text(
-                    "Tem certeza que deseja cancelar esta reserva?",
-                    text_align=ft.TextAlign.CENTER
-                ),
-                ft.Text(
-                    "Esta ação não pode ser desfeita.",
-                    size=12,
-                    color=ft.Colors.GREY,
-                    text_align=ft.TextAlign.CENTER
-                )
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
-            actions=[
-                ft.TextButton(
-                    "Não",
-                    on_click=fechar_dialogo
-                ),
-                ft.ElevatedButton(
-                    "Sim, Cancelar",
-                    on_click=confirmar_cancelamento,
-                    style=ft.ButtonStyle(
-                        bgcolor=ft.Colors.RED,
-                        color=ft.Colors.WHITE
+        # --- DEBUG: Verifica se esta função é chamada ---
+        print(f"--- [UI] Função cancelar_reserva chamada para ID: {reserva.id[:8]} ---")
+        try:
+            # Define as funções internas primeiro
+            def confirmar_cancelamento(e):
+                print(f"--- [UI] Função confirmar_cancelamento chamada para ID: {reserva.id[:8]} ---")
+                resultado = gerenciador.cancelar_reserva(reserva.id) # Chama o manager
+                print(f"--- [UI] Resultado do gerenciador.cancelar_reserva: {resultado} ---")
+
+                if resultado:
+                    mostrar_snackbar("Reserva cancelada com sucesso!")
+                    atualizar_lista_reservas()
+                else:
+                    mostrar_snackbar(f"Não foi possível cancelar a reserva (ID: {reserva.id[:8]}...). Verifique o status ou logs.")
+                    # Atualizar a lista mesmo em caso de falha pode ser útil
+                    atualizar_lista_reservas()
+
+                # Fechar o diálogo DEPOIS de atualizar a lista e mostrar snackbar
+                # Garantir que 'dialogo' ainda existe no escopo (deve existir)
+                if 'dialogo' in locals() and dialogo is not None:
+                     dialogo.open = False
+                     print(f"--- [UI] Fechando diálogo para ID: {reserva.id[:8]} ---")
+                     page.update() # Atualiza a página para fechar o diálogo
+                else:
+                    print("--- [UI] ERRO: Variável 'dialogo' não encontrada ao tentar fechar. ---")
+                    page.update() # Tenta atualizar mesmo assim
+
+            def fechar_dialogo(e):
+                print(f"--- [UI] Função fechar_dialogo chamada para ID: {reserva.id[:8]} ---")
+                 # Garantir que 'dialogo' ainda existe no escopo
+                if 'dialogo' in locals() and dialogo is not None:
+                    dialogo.open = False
+                    page.update()
+                else:
+                    print("--- [UI] ERRO: Variável 'dialogo' não encontrada ao tentar fechar (em fechar_dialogo). ---")
+                    page.update()
+
+
+            # --- Criação do Diálogo ---
+            print(f"--- [UI] Criando AlertDialog para ID: {reserva.id[:8]} ---")
+            dialogo = ft.AlertDialog(
+                modal=True, # Garante que é modal
+                title=ft.Text("Confirmar Cancelamento"),
+                content=ft.Column([
+                    ft.Icon(
+                        name=ft.Icons.WARNING_AMBER_ROUNDED,
+                        color=ft.Colors.AMBER,
+                        size=50
+                    ),
+                    ft.Text(
+                        "Tem certeza que deseja cancelar esta reserva?",
+                        text_align=ft.TextAlign.CENTER
+                    ),
+                    ft.Text(
+                        "Esta ação não pode ser desfeita.",
+                        size=12,
+                        color=ft.Colors.GREY,
+                        text_align=ft.TextAlign.CENTER
                     )
-                )
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
-        )
-    
-        page.dialog = dialogo
-        dialogo.open = True
-        page.update()
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
+                actions=[
+                    ft.TextButton(
+                        "Não",
+                        on_click=fechar_dialogo # Usa a função interna
+                    ),
+                    ft.ElevatedButton(
+                        "Sim, Cancelar",
+                        on_click=confirmar_cancelamento, # Usa a função interna
+                        style=ft.ButtonStyle(
+                            bgcolor=ft.Colors.RED,
+                            color=ft.Colors.WHITE
+                        )
+                    )
+                ],
+                actions_alignment=ft.MainAxisAlignment.END
+            )
+            print(f"--- [UI] AlertDialog criado para ID: {reserva.id[:8]} ---")
+
+            # --- Tentativa de abrir o diálogo ---
+            page.dialog = dialogo
+            dialogo.open = True
+            print(f"--- [UI] Tentando abrir diálogo (dialogo.open = True) para ID: {reserva.id[:8]} ---")
+            page.update()
+            print(f"--- [UI] page.update() chamado após tentar abrir diálogo para ID: {reserva.id[:8]} ---")
+
+        except Exception as ErroUI:
+            # Captura QUALQUER erro que ocorra dentro desta função
+            import traceback
+            print(f"!!! ERRO GRAVE dentro da função UI cancelar_reserva para ID {reserva.id[:8]} !!!")
+            print(f"Erro: {ErroUI}")
+            print(traceback.format_exc())
+            mostrar_snackbar(f"Erro interno ao tentar iniciar cancelamento: {ErroUI}")
     
     # Funções de navegação
     def navegar_para(tela):
