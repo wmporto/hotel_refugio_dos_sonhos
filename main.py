@@ -323,12 +323,21 @@ class GerenciadorDeReservas:
         return False
     
     def cancelar_reserva(self, reserva_id: str) -> bool:
-        reserva = self.obter_reserva_por_id(reserva_id)
-        if reserva:
+        try:
+            reserva = self.obter_reserva_por_id(reserva_id)
+            if not reserva:
+                return False
+                
+            # Check if the reservation is already canceled or completed
+            if reserva.status in ["Cancelada", "Concluída"]:
+                return False
+                
             reserva.status = "Cancelada"
             self._salvar_dados()
             return True
-        return False
+        except Exception as e:
+            print(f"Erro ao cancelar reserva: {e}")
+            return False
     
     def listar_clientes(self) -> List[Cliente]:
         return self._clientes
@@ -600,6 +609,11 @@ def main(page: ft.Page):
                 "Concluída": ft.Colors.BLUE
             }.get(reserva.status, ft.Colors.GREY)
             
+            # Add a visual indicator for canceled reservations
+            opacity = 1.0
+            if reserva.status == "Cancelada":
+                opacity = 0.6  # Make canceled reservations appear faded
+            
             # Determinar se os botões de ação devem estar habilitados
             # (desabilitar para reservas já canceladas ou concluídas)
             botoes_habilitados = reserva.status not in ["Cancelada", "Concluída"]
@@ -655,7 +669,8 @@ def main(page: ft.Page):
                 padding=15,
                 border_radius=10,
                 border=ft.border.all(1, cor_status),
-                margin=ft.margin.only(bottom=10)
+                margin=ft.margin.only(bottom=10),
+                opacity=opacity  # Add this line
             )
             
             lista_reservas.controls.append(card_reserva)
@@ -1090,19 +1105,24 @@ def main(page: ft.Page):
     
     def cancelar_reserva(reserva):
         def confirmar_cancelamento(e):
-            # Corrigido: Garantir que o cancelamento seja processado e salvo
-            if gerenciador.cancelar_reserva(reserva.id):
+            # Process the cancellation immediately
+            resultado = gerenciador.cancelar_reserva(reserva.id)
+        
+            if resultado:
                 mostrar_snackbar("Reserva cancelada com sucesso!")
-                # Atualizar a lista de reservas imediatamente após o cancelamento
+                # Close dialog and update the reservations list
+                dialogo.open = False
                 atualizar_lista_reservas()
-                fechar_dialogo(e)
+                page.update()
             else:
                 mostrar_snackbar("Erro ao cancelar a reserva!")
-        
+                dialogo.open = False
+                page.update()
+    
         def fechar_dialogo(e):
             dialogo.open = False
             page.update()
-        
+    
         # Criar o diálogo de confirmação com visual melhorado
         dialogo = ft.AlertDialog(
             title=ft.Text("Confirmar Cancelamento"),
@@ -1139,7 +1159,7 @@ def main(page: ft.Page):
             ],
             actions_alignment=ft.MainAxisAlignment.END
         )
-        
+    
         page.dialog = dialogo
         dialogo.open = True
         page.update()
