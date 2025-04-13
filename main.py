@@ -474,7 +474,7 @@ def main(page: ft.Page):
             # Definir cores e ícones com base na disponibilidade
             cor_fundo = ft.Colors.GREEN_50 if disponivel else ft.Colors.RED_50
             cor_borda = ft.Colors.GREEN if disponivel else ft.Colors.RED
-            icone = ft.icons.CHECK_CIRCLE if disponivel else ft.icons.DO_NOT_DISTURB
+            icone = ft.Icons.CHECK_CIRCLE if disponivel else ft.Icons.DO_NOT_DISTURB
             status_texto = "Disponível" if disponivel else "Ocupado"
             
             # Criar um card para o quarto com visual melhorado
@@ -483,7 +483,7 @@ def main(page: ft.Page):
                     # Ícone e informações do quarto
                     ft.Row([
                         ft.Icon(
-                            name=ft.icons.KING_BED,
+                            name=ft.Icons.KING_BED,
                             size=30,
                             color=ft.Colors.BLUE_700
                         ),
@@ -543,7 +543,7 @@ def main(page: ft.Page):
             actions=[
                 ft.ElevatedButton(
                     "Fazer Reserva",
-                    icon=ft.icons.BOOKMARK_ADD,
+                    icon=ft.Icons.BOOKMARK_ADD,
                     on_click=fazer_reserva
                 ),
                 ft.TextButton("Fechar", on_click=fechar_dialogo)
@@ -608,7 +608,7 @@ def main(page: ft.Page):
                 content=ft.Column([
                     ft.ListTile(
                         leading=ft.Icon(
-                            ft.icons.BOOKMARK,
+                            ft.Icons.BOOKMARK,
                             color=cor_status,
                             size=30
                         ),
@@ -636,13 +636,13 @@ def main(page: ft.Page):
                     ft.Row([
                         ft.ElevatedButton(
                             "Editar",
-                            icon=ft.icons.EDIT,
+                            icon=ft.Icons.EDIT,
                             on_click=lambda e, r=reserva: editar_reserva(r),
                             disabled=not botoes_habilitados
                         ),
                         ft.ElevatedButton(
                             "Cancelar Reserva",
-                            icon=ft.icons.CANCEL,
+                            icon=ft.Icons.CANCEL,
                             on_click=lambda e, r=reserva: cancelar_reserva(r),
                             style=ft.ButtonStyle(
                                 bgcolor=ft.Colors.RED if botoes_habilitados else ft.Colors.GREY,
@@ -1108,7 +1108,7 @@ def main(page: ft.Page):
             title=ft.Text("Confirmar Cancelamento"),
             content=ft.Column([
                 ft.Icon(
-                    name=ft.icons.WARNING_AMBER_ROUNDED,
+                    name=ft.Icons.WARNING_AMBER_ROUNDED,
                     color=ft.Colors.AMBER,
                     size=50
                 ),
@@ -1167,7 +1167,7 @@ def main(page: ft.Page):
         botoes_acao = ft.Row([
             ft.ElevatedButton(
                 text="Fazer Nova Reserva",
-                icon=ft.icons.ADD_CIRCLE,
+                icon=ft.Icons.ADD_CIRCLE,
                 on_click=lambda e: navegar_para("nova_reserva"),
                 style=ft.ButtonStyle(
                     bgcolor=ft.Colors.BLUE_700,
@@ -1176,7 +1176,7 @@ def main(page: ft.Page):
             ),
             ft.ElevatedButton(
                 text="Gerenciar Clientes",
-                icon=ft.icons.PEOPLE,
+                icon=ft.Icons.PEOPLE,
                 on_click=lambda e: navegar_para("clientes"),
                 style=ft.ButtonStyle(
                     bgcolor=ft.Colors.GREEN_700,
@@ -1185,7 +1185,7 @@ def main(page: ft.Page):
             ),
             ft.ElevatedButton(
                 text="Ver Reservas",
-                icon=ft.icons.LIST_ALT,
+                icon=ft.Icons.LIST_ALT,
                 on_click=lambda e: navegar_para("reservas"),
                 style=ft.ButtonStyle(
                     bgcolor=ft.Colors.ORANGE_700,
@@ -1451,7 +1451,7 @@ def main(page: ft.Page):
         # Botão para nova reserva
         botao_nova_reserva = ft.ElevatedButton(
             text="Nova Reserva",
-            icon=ft.icons.ADD,
+            icon=ft.Icons.ADD,
             on_click=lambda e: navegar_para("nova_reserva"),
             style=ft.ButtonStyle(
                 bgcolor=ft.Colors.GREEN_700,
