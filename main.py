@@ -11,7 +11,6 @@ import traceback # Import traceback for detailed error logging
 # Classes do modelo de dados
 # ==============================================================================
 class Cliente:
-    # ... (código da classe Cliente sem alterações) ...
     def __init__(self, nome: str, telefone: str, email: str, id: str = None):
         self._nome = nome
         self._telefone = telefone
@@ -40,13 +39,12 @@ class Cliente:
         return cls(nome=data["nome"], telefone=data["telefone"], email=data["email"], id=data["id"])
 
 class Quarto:
-    # ... (código da classe Quarto sem alterações) ...
     TIPOS = ["Single", "Double", "Suite"]
     def __init__(self, numero: int, tipo: str, preco: float, disponivel: bool = True):
         self._numero = numero
         self._tipo = tipo if tipo in self.TIPOS else "Single"
         self._preco = preco
-        self._disponivel = disponivel # Flag geral (manutenção, etc.)
+        self._disponivel = disponivel 
 
     @property
     def numero(self) -> int: return self._numero
@@ -72,7 +70,6 @@ class Quarto:
         return cls(numero=data["numero"], tipo=data["tipo"], preco=data["preco"], disponivel=data.get("disponivel", True))
 
 class Reserva:
-    # ... (código da classe Reserva sem alterações) ...
     STATUS = ["Confirmada", "Pendente", "Cancelada", "Concluída"]
     def __init__(self, cliente_id: str, quarto_numero: int,
                  check_in: str, check_out: str,
@@ -116,7 +113,6 @@ class Reserva:
 # Classe Gerenciadora
 # ==============================================================================
 class GerenciadorDeReservas:
-    # ... (código do Gerenciador SEM ALTERAÇÕES NECESSÁRIAS para este request) ...
     def __init__(self):
         self._clientes: List[Cliente] = []
         self._quartos: List[Quarto] = []
@@ -325,7 +321,6 @@ def main(page: ft.Page):
         # page.update() # Atualização será feita pelo navegar_para
 
     def atualizar_dropdown_clientes():
-        # ... (código como na versão anterior) ...
         dropdown_clientes_reserva.options.clear()
         clientes = gerenciador.listar_clientes()
         if not clientes:
@@ -339,13 +334,8 @@ def main(page: ft.Page):
                 dropdown_clientes_reserva.options.append(
                     ft.dropdown.Option(key=cliente.id, text=cliente.nome)
                 )
-            # Não auto-seleciona, deixa o usuário escolher
-            # if clientes and dropdown_clientes_reserva.value is None:
-            #     dropdown_clientes_reserva.value = clientes[0].id
-        # page.update() # Atualização será feita pelo navegar_para ou on_change dp
 
     def atualizar_dropdown_quartos(check_in_dt: Optional[datetime], check_out_dt: Optional[datetime]):
-        # ... (código como na versão anterior) ...
         dropdown_quartos_reserva.options.clear()
         dropdown_quartos_reserva.value = None
         dropdown_quartos_reserva.disabled = True
@@ -358,12 +348,10 @@ def main(page: ft.Page):
             dropdown_quartos_reserva.hint_text = "Selecione..."; dropdown_quartos_reserva.disabled = False
             for quarto in quartos_disponiveis:
                 dropdown_quartos_reserva.options.append(ft.dropdown.Option(key=str(quarto.numero), text=f"Quarto {quarto.numero} ({quarto.tipo}) - R${quarto.preco:.2f}"))
-            # Não auto-seleciona, deixa o usuário escolher
-            # if quartos_disponiveis: dropdown_quartos_reserva.value = str(quartos_disponiveis[0].numero)
+
         page.update() # Precisa atualizar o dropdown aqui
 
     def ocultar_e_cancelar_reserva(e, reserva_obj: Reserva, card_container: ft.Container):
-        # ... (código como na versão anterior) ...
         print(f"--- [UI] Ocultar e cancelar chamado para ID: {reserva_obj.id[:8]} ---")
         card_container.visible = False; page.update()
         print(f"--- [UI] Card {reserva_obj.id[:8]} ocultado. ---")
@@ -379,7 +367,6 @@ def main(page: ft.Page):
             print(f"--- [UI] Falha ao cancelar. Card {reserva_obj.id[:8]} re-exibido. ---")
 
     def atualizar_lista_reservas():
-        # ... (código como na versão anterior, usando ocultar_e_cancelar_reserva) ...
         print("--- [UI] Atualizando lista de reservas (com ocultar/cancelar) ---")
         lista_reservas_view.controls.clear()
         reservas = gerenciador.listar_reservas()
@@ -406,7 +393,6 @@ def main(page: ft.Page):
                 lista_reservas_view.controls.append(card_reserva)
         print(f"--- [UI] Lista de reservas atualizada com {len(lista_reservas_view.controls)} itens ---")
         # page.update() # Atualização é feita pelo navegar_para
-
 
     # --- Funções de Manipulação e Ação ---
     def editar_reserva(reserva: Reserva):
@@ -484,7 +470,6 @@ def main(page: ft.Page):
 
         # Calcula estatísticas
         total_quartos = len(gerenciador.listar_quartos())
-        # Simplificado: usa o flag base para "Disponível" no dashboard
         quartos_disp_base = len([q for q in gerenciador.listar_quartos() if q.disponivel])
         total_clientes = len(gerenciador.listar_clientes())
         reservas_ativas = len([r for r in gerenciador.listar_reservas() if r.status == 'Confirmada'])
@@ -547,7 +532,6 @@ def main(page: ft.Page):
          atualizar_lista_reservas()
          return ft.Column([
              ft.Row([ft.Text("Reservas", size=24, weight=ft.FontWeight.BOLD),
-                    # REMOVIDO: Botão Nova Reserva daqui
                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
              ft.Divider(),
              lista_reservas_view,
